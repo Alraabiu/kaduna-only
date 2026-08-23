@@ -1,0 +1,421 @@
+[
+  {
+    "_id": "6a87f094708f15b34ad37691",
+    "tripId": "TRP-93844632-98",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "car",
+    "pickup": {
+      "label": "Barnawa, Kaduna"
+    },
+    "destination": {
+      "label": "Kakuri, Kaduna"
+    },
+    "distanceKm": 4.2,
+    "estimatedMinutes": 15,
+    "fare": 1200,
+    "paymentMethod": "cash",
+    "status": "CANCELLED",
+    "createdAt": "2026-08-21T06:30:44.651Z",
+    "updatedAt": "2026-08-21T07:13:47.017Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a87facdfea11361410cc710",
+    "tripId": "TRP-96461921-98",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Barnawa"
+    },
+    "destination": {
+      "label": "Kawo"
+    },
+    "distanceKm": 18.1,
+    "estimatedMinutes": 50,
+    "fare": 3400,
+    "paymentMethod": "cash",
+    "status": "TRIP_COMPLETED",
+    "createdAt": "2026-08-21T07:14:21.940Z",
+    "updatedAt": "2026-08-21T08:36:15.332Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T07:24:10.727Z",
+    "driver": "6a87e36ea0537ccda9f36550",
+    "arrivingAt": "2026-08-21T07:24:35.473Z",
+    "arrivedAt": "2026-08-21T08:36:08.748Z",
+    "startedAt": "2026-08-21T08:36:12.943Z",
+    "completedAt": "2026-08-21T08:36:15.332Z"
+  },
+  {
+    "_id": "6a880e0627bfccf593434008",
+    "tripId": "TRP-01382640-14",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Barnawa"
+    },
+    "destination": {
+      "label": "Kawo"
+    },
+    "distanceKm": 18.1,
+    "estimatedMinutes": 50,
+    "fare": 3400,
+    "paymentMethod": "cash",
+    "status": "TRIP_COMPLETED",
+    "createdAt": "2026-08-21T08:36:22.655Z",
+    "updatedAt": "2026-08-21T08:37:51.676Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T08:36:34.897Z",
+    "driver": "6a87e36ea0537ccda9f36550",
+    "arrivingAt": "2026-08-21T08:37:16.292Z",
+    "arrivedAt": "2026-08-21T08:37:35.474Z",
+    "startedAt": "2026-08-21T08:37:38.818Z",
+    "completedAt": "2026-08-21T08:37:51.675Z"
+  },
+  {
+    "_id": "6a880e8827bfccf59343400c",
+    "tripId": "TRP-01512934-69",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Barnawa"
+    },
+    "destination": {
+      "label": "Kawo"
+    },
+    "distanceKm": 18.1,
+    "estimatedMinutes": 50,
+    "fare": 3400,
+    "paymentMethod": "cash",
+    "status": "CANCELLED",
+    "createdAt": "2026-08-21T08:38:32.937Z",
+    "updatedAt": "2026-08-21T08:38:45.983Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T08:38:42.017Z",
+    "driver": "6a87e36ea0537ccda9f36550"
+  },
+  {
+    "_id": "6a88135b69b8908abab471e6",
+    "tripId": "TRP-02747753-18",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "My current location",
+      "lat": 7.78,
+      "lng": 4.55
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 592.9,
+    "estimatedMinutes": 487,
+    "fare": 95400,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "status": "TRIP_COMPLETED",
+    "createdAt": "2026-08-21T08:59:07.783Z",
+    "updatedAt": "2026-08-21T09:00:14.028Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T08:59:25.831Z",
+    "driver": "6a87e36ea0537ccda9f36550",
+    "arrivingAt": "2026-08-21T09:00:08.784Z",
+    "arrivedAt": "2026-08-21T09:00:10.939Z",
+    "startedAt": "2026-08-21T09:00:12.012Z",
+    "completedAt": "2026-08-21T09:00:14.027Z"
+  },
+  {
+    "_id": "6a88150069b8908abab471ed",
+    "tripId": "TRP-03168657-36",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Ghana Road, Ungwan Liman, Kaduna North, Kaduna State, 800242, Nigeria",
+      "lat": 10.5626918,
+      "lng": 7.4664904
+    },
+    "destination": {
+      "label": "Kaduna State Polytechnic Clinic Tudun Wada No10 Musabaka Road Kinkinau Kaduna, Hamzawie Close, Kinkinau, Tundun Wada South, Kaduna South, Kaduna State, 800024, Nigeria",
+      "lat": 10.5012017,
+      "lng": 7.4056891
+    },
+    "distanceKm": 12.7,
+    "estimatedMinutes": 22,
+    "fare": 2550,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "status": "TRIP_COMPLETED",
+    "createdAt": "2026-08-21T09:06:08.663Z",
+    "updatedAt": "2026-08-21T09:07:36.007Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T09:07:10.148Z",
+    "driver": "6a87e36ea0537ccda9f36550",
+    "arrivingAt": "2026-08-21T09:07:30.902Z",
+    "arrivedAt": "2026-08-21T09:07:33.111Z",
+    "startedAt": "2026-08-21T09:07:33.910Z",
+    "completedAt": "2026-08-21T09:07:36.007Z"
+  },
+  {
+    "_id": "6a881821ff4ed024ab62d8c3",
+    "tripId": "TRP-03969154-84",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Ghana Road, Ungwan Liman, Kaduna North, Kaduna State, 800242, Nigeria",
+      "lat": 10.5626918,
+      "lng": 7.4664904
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 4.4,
+    "estimatedMinutes": 12,
+    "fare": 1250,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "status": "TRIP_COMPLETED",
+    "createdAt": "2026-08-21T09:19:29.178Z",
+    "updatedAt": "2026-08-21T09:21:03.184Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T09:19:34.483Z",
+    "driver": "6a87e36ea0537ccda9f36550",
+    "arrivingAt": "2026-08-21T09:20:34.590Z",
+    "arrivedAt": "2026-08-21T09:20:47.665Z",
+    "startedAt": "2026-08-21T09:21:01.522Z",
+    "completedAt": "2026-08-21T09:21:03.184Z"
+  },
+  {
+    "_id": "6a881b3b4b78ce73d716c8ea",
+    "tripId": "TRP-04763514-99",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "bike",
+    "pickup": {
+      "label": "Ghana Road, Ungwan Liman, Kaduna North, Kaduna State, 800242, Nigeria",
+      "lat": 10.5626918,
+      "lng": 7.4664904
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 4.4,
+    "estimatedMinutes": 11,
+    "fare": 900,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "status": "CANCELLED",
+    "createdAt": "2026-08-21T09:32:43.539Z",
+    "updatedAt": "2026-08-21T12:31:22.624Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a8845306ce7a056d9aea403",
+    "tripId": "TRP-15504503-79",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "bike",
+    "pickup": {
+      "label": "Kaduna, Kabala, Kaduna North, Kaduna State, 800211, Nigeria",
+      "lat": 10.5182899,
+      "lng": 7.4359863
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 10.7,
+    "estimatedMinutes": 16,
+    "fare": 1650,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "status": "CANCELLED",
+    "createdAt": "2026-08-21T12:31:44.533Z",
+    "updatedAt": "2026-08-21T12:33:56.211Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a8845ce6ce7a056d9aea445",
+    "tripId": "TRP-15662473-84",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "bike",
+    "pickup": {
+      "label": "Kaduna, Kabala, Kaduna North, Kaduna State, 800211, Nigeria",
+      "lat": 10.5182899,
+      "lng": 7.4359863
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 10.7,
+    "estimatedMinutes": 16,
+    "fare": 1650,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "status": "CANCELLED",
+    "createdAt": "2026-08-21T12:34:22.479Z",
+    "updatedAt": "2026-08-21T12:43:41.730Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a8848166ce7a056d9aea478",
+    "tripId": "TRP-16246146-91",
+    "rider": "6a87e36ea0537ccda9f36551",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Kaduna, Kabala, Kaduna North, Kaduna State, 800211, Nigeria",
+      "lat": 10.5182899,
+      "lng": 7.4359863
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 10.7,
+    "estimatedMinutes": 16,
+    "fare": 2250,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "status": "CANCELLED",
+    "createdAt": "2026-08-21T12:44:06.150Z",
+    "updatedAt": "2026-08-21T16:24:43.514Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T12:47:15.045Z",
+    "driver": "6a87e36ea0537ccda9f36550"
+  },
+  {
+    "_id": "6a8880ce5fe7a51f864d1968",
+    "tripId": "TRP-30766025-81",
+    "rider": "6a887c5ba291672cd936c623",
+    "vehicleType": "bike",
+    "pickup": {
+      "label": "Kaduna, Kabala, Kaduna North, Kaduna State, 800211, Nigeria",
+      "lat": 10.5182899,
+      "lng": 7.4359863
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 10.7,
+    "estimatedMinutes": 16,
+    "fare": 1650,
+    "routingSource": "osrm",
+    "paymentMethod": "wallet",
+    "paymentStatus": "refunded",
+    "status": "CANCELLED",
+    "walletReservationReference": "RIDE-RESERVE-TRP-30766025-81",
+    "walletReservedAt": "2026-08-21T16:46:06.060Z",
+    "createdAt": "2026-08-21T16:46:06.080Z",
+    "updatedAt": "2026-08-21T17:39:23.214Z",
+    "__v": 0,
+    "cancelledAt": "2026-08-21T17:39:23.210Z",
+    "walletRefundedAt": "2026-08-21T17:39:23.210Z"
+  },
+  {
+    "_id": "6a888ec55992e7221b84aaac",
+    "tripId": "TRP-34341500-53",
+    "rider": "6a887c5ba291672cd936c623",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Kaduna, Kabala, Kaduna North, Kaduna State, 800211, Nigeria",
+      "lat": 10.5182899,
+      "lng": 7.4359863
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 10.7,
+    "estimatedMinutes": 16,
+    "fare": 2250,
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "paymentStatus": "cash_pending",
+    "status": "CANCELLED",
+    "createdAt": "2026-08-21T17:45:41.527Z",
+    "updatedAt": "2026-08-21T17:46:27.484Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T17:45:55.664Z",
+    "driver": "6a88813e5fe7a51f864d1969",
+    "cancelledAt": "2026-08-21T17:46:27.481Z"
+  },
+  {
+    "_id": "6a888f135992e7221b84aaad",
+    "tripId": "TRP-34419897-58",
+    "rider": "6a887c5ba291672cd936c623",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Kaduna, Kabala, Kaduna North, Kaduna State, 800211, Nigeria",
+      "lat": 10.5182899,
+      "lng": 7.4359863
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 10.7,
+    "estimatedMinutes": 16,
+    "fare": 2250,
+    "routingSource": "osrm",
+    "paymentMethod": "wallet",
+    "paymentStatus": "paid",
+    "status": "TRIP_COMPLETED",
+    "walletReservationReference": "RIDE-RESERVE-TRP-34419897-58",
+    "walletReservedAt": "2026-08-21T17:46:59.913Z",
+    "createdAt": "2026-08-21T17:46:59.916Z",
+    "updatedAt": "2026-08-21T17:47:53.205Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-21T17:47:23.315Z",
+    "driver": "6a88813e5fe7a51f864d1969",
+    "arrivingAt": "2026-08-21T17:47:32.818Z",
+    "arrivedAt": "2026-08-21T17:47:36.541Z",
+    "startedAt": "2026-08-21T17:47:38.877Z",
+    "completedAt": "2026-08-21T17:47:53.205Z",
+    "walletSettledAt": "2026-08-21T17:47:53.205Z"
+  },
+  {
+    "_id": "6a89426c9f154640946e2e1e",
+    "tripId": "TRP-80332001-77",
+    "rider": "6a887c5ba291672cd936c623",
+    "vehicleType": "keke",
+    "pickup": {
+      "label": "Kaduna, Kabala, Kaduna North, Kaduna State, 800211, Nigeria",
+      "lat": 10.5182899,
+      "lng": 7.4359863
+    },
+    "destination": {
+      "label": "Kawo, Kaduna North, Kaduna State, Nigeria",
+      "lat": 10.586191,
+      "lng": 7.4559302
+    },
+    "distanceKm": 10.7,
+    "estimatedMinutes": 16,
+    "fare": 2250,
+    "platformCommission": 50,
+    "driverNetEarning": 2200,
+    "commissionStatus": "collected",
+    "routingSource": "osrm",
+    "paymentMethod": "cash",
+    "paymentStatus": "paid",
+    "status": "TRIP_COMPLETED",
+    "createdAt": "2026-08-22T06:32:12.027Z",
+    "updatedAt": "2026-08-22T06:32:41.410Z",
+    "__v": 0,
+    "acceptedAt": "2026-08-22T06:32:30.809Z",
+    "driver": "6a88813e5fe7a51f864d1969",
+    "arrivingAt": "2026-08-22T06:32:35.852Z",
+    "arrivedAt": "2026-08-22T06:32:37.314Z",
+    "startedAt": "2026-08-22T06:32:40.074Z",
+    "completedAt": "2026-08-22T06:32:41.353Z",
+    "commissionCollectedAt": "2026-08-22T06:32:41.401Z"
+  }
+]

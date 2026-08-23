@@ -1,0 +1,89 @@
+[
+  {
+    "_id": "6a887c91a291672cd936c625",
+    "user": "6a887c5ba291672cd936c623",
+    "provider": "paystack",
+    "purpose": "wallet_topup",
+    "reference": "KO-WALLET-1787329679366-1F1A29D60D",
+    "accessCode": "tx8tfdendddhf83",
+    "amount": 2000,
+    "currency": "NGN",
+    "status": "success",
+    "metadata": {
+      "email": "alraabiuglobal@gmail.com",
+      "phone": "09136879145"
+    },
+    "createdAt": "2026-08-21T16:28:01.297Z",
+    "updatedAt": "2026-08-21T16:28:45.482Z",
+    "__v": 0,
+    "channel": "card",
+    "creditedAt": "2026-08-21T16:28:45.480Z",
+    "gatewayResponse": "[Test] Approved",
+    "paidAt": "2026-08-21T16:28:37.000Z",
+    "paystackTransactionId": "6479232616"
+  },
+  {
+    "_id": "6a888b56d8f7e3b51dd89ab8",
+    "user": "6a887c5ba291672cd936c623",
+    "provider": "paystack",
+    "purpose": "wallet_topup",
+    "reference": "KO-WALLET-1787333461078-261214C3E7",
+    "accessCode": "adr3kbz58m0k5ya",
+    "amount": 5000,
+    "currency": "NGN",
+    "status": "success",
+    "metadata": {
+      "email": "alraabiuglobal@gmail.com",
+      "phone": "09136879145"
+    },
+    "createdAt": "2026-08-21T17:31:02.463Z",
+    "updatedAt": "2026-08-21T17:31:29.337Z",
+    "__v": 0,
+    "channel": "card",
+    "creditedAt": "2026-08-21T17:31:29.337Z",
+    "gatewayResponse": "[Test] Approved",
+    "paidAt": "2026-08-21T17:31:22.000Z",
+    "paystackTransactionId": "6479399929"
+  },
+  {
+    "_id": "6a892da27e87193a42f59613",
+    "user": "6a887c5ba291672cd936c623",
+    "provider": "paystack",
+    "purpose": "wallet_topup",
+    "reference": "KO-WALLET-1787375009668-C1ECF0E197",
+    "accessCode": "pjs39j2eix432or",
+    "amount": 100,
+    "currency": "NGN",
+    "status": "initialized",
+    "metadata": {
+      "email": "alraabiuglobal@gmail.com",
+      "phone": "09136879145"
+    },
+    "createdAt": "2026-08-22T05:03:30.821Z",
+    "updatedAt": "2026-08-22T05:03:30.821Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a8931a97e87193a42f59614",
+    "user": "6a887c5ba291672cd936c623",
+    "provider": "paystack",
+    "purpose": "wallet_topup",
+    "reference": "KO-WALLET-1787376040433-45AB93E363",
+    "accessCode": "2sahf2qt15qcnf7",
+    "amount": 100,
+    "currency": "NGN",
+    "status": "success",
+    "metadata": {
+      "email": "alraabiuglobal@gmail.com",
+      "phone": "09136879145"
+    },
+    "createdAt": "2026-08-22T05:20:41.640Z",
+    "updatedAt": "2026-08-22T05:22:03.893Z",
+    "__v": 0,
+    "channel": "bank_transfer",
+    "creditedAt": "2026-08-22T05:22:03.881Z",
+    "gatewayResponse": "Approved",
+    "paidAt": "2026-08-22T05:21:53.000Z",
+    "paystackTransactionId": "6480595763"
+  }
+]

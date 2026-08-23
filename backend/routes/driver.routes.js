@@ -1,0 +1,14 @@
+const r=require('express').Router(),c=require('../controllers/driverController'),w=require('../controllers/withdrawalController'),{requireAuth,requireRole}=require('../middleware/auth');
+r.use(requireAuth);
+r.get('/dashboard',requireRole('driver'),c.dashboard);
+r.get('/me',requireRole('driver'),c.getMe);
+r.patch('/me',requireRole('driver'),c.updateMe);
+r.patch('/me/online',requireRole('driver'),c.setOnline);
+r.patch('/me/location',requireRole('driver'),c.location);
+r.get('/bank-account',requireRole('driver'),w.getBankAccount);
+r.patch('/bank-account',requireRole('driver'),w.saveBankAccount);
+r.get('/withdrawals',requireRole('driver'),w.driverList);
+r.post('/withdrawals',requireRole('driver'),w.requestWithdrawal);
+r.get('/',requireRole('admin'),c.list);
+r.patch('/:id/verify',requireRole('admin'),c.verify);
+module.exports=r;

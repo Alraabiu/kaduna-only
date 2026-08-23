@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+*.log
+test-trip-backup.json
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

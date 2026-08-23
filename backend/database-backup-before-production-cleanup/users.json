@@ -1,0 +1,71 @@
+[
+  {
+    "_id": "6a87e36ea0537ccda9f3654f",
+    "phone": "08000000001",
+    "__v": 0,
+    "createdAt": "2026-08-21T05:34:37.981Z",
+    "email": "admin@kadunaonly.local",
+    "fullName": "Kaduna Only Admin",
+    "role": "admin",
+    "status": "active",
+    "updatedAt": "2026-08-21T07:46:37.242Z"
+  },
+  {
+    "_id": "6a87e36ea0537ccda9f36550",
+    "phone": "08000000003",
+    "__v": 0,
+    "createdAt": "2026-08-21T05:34:38.023Z",
+    "email": "driver@kadunaonly.local",
+    "fullName": "Kaduna Only Driver",
+    "role": "driver",
+    "status": "active",
+    "updatedAt": "2026-08-21T07:46:37.269Z"
+  },
+  {
+    "_id": "6a87e36ea0537ccda9f36551",
+    "phone": "08000000004",
+    "__v": 0,
+    "createdAt": "2026-08-21T05:34:38.032Z",
+    "email": "rider@kadunaonly.local",
+    "fullName": "Kaduna Only Rider",
+    "role": "rider",
+    "status": "active",
+    "updatedAt": "2026-08-21T08:28:37.782Z"
+  },
+  {
+    "_id": "6a887c5ba291672cd936c623",
+    "fullName": "Muhammad Rabiu Musa",
+    "phone": "09136879145",
+    "email": "alraabiuglobal@gmail.com",
+    "role": "rider",
+    "status": "active",
+    "pushTokens": [],
+    "createdAt": "2026-08-21T16:27:07.684Z",
+    "updatedAt": "2026-08-21T16:27:07.684Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a88813e5fe7a51f864d1969",
+    "fullName": "Muhammad Rabiu",
+    "phone": "08100300905",
+    "email": "muhammadtech001@gmail.com",
+    "role": "driver",
+    "status": "active",
+    "pushTokens": [],
+    "createdAt": "2026-08-21T16:47:58.472Z",
+    "updatedAt": "2026-08-21T16:47:58.472Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a88834da32b5d7f93b57a50",
+    "phone": "08056480413",
+    "__v": 0,
+    "createdAt": "2026-08-21T16:56:45.672Z",
+    "email": "kadunaonly@gmail.com",
+    "fullName": "Kaduna Only Admin",
+    "pushTokens": [],
+    "role": "admin",
+    "status": "active",
+    "updatedAt": "2026-08-21T17:06:30.863Z"
+  }
+]

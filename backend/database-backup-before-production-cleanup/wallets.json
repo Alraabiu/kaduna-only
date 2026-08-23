@@ -1,0 +1,137 @@
+[
+  {
+    "_id": "6a87e36ea0537ccda9f36552",
+    "user": "6a87e36ea0537ccda9f3654f",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-08-21T05:34:38.038Z",
+    "transactions": [],
+    "updatedAt": "2026-08-21T07:46:37.280Z"
+  },
+  {
+    "_id": "6a87e36ea0537ccda9f36553",
+    "user": "6a87e36ea0537ccda9f36550",
+    "__v": 0,
+    "balance": 106000,
+    "createdAt": "2026-08-21T05:34:38.049Z",
+    "transactions": [
+      {
+        "type": "credit",
+        "amount": 3400,
+        "description": "Earnings TRP-96461921-98",
+        "trip": "6a87facdfea11361410cc710",
+        "_id": "6a880dff27bfccf593434006",
+        "createdAt": "2026-08-21T08:36:15.354Z"
+      },
+      {
+        "type": "credit",
+        "amount": 3400,
+        "description": "Earnings TRP-01382640-14",
+        "trip": "6a880e0627bfccf593434008",
+        "_id": "6a880e5f27bfccf593434009",
+        "createdAt": "2026-08-21T08:37:51.684Z"
+      },
+      {
+        "type": "credit",
+        "amount": 95400,
+        "description": "Earnings TRP-02747753-18",
+        "trip": "6a88135b69b8908abab471e6",
+        "_id": "6a88139e69b8908abab471e9",
+        "createdAt": "2026-08-21T09:00:14.038Z"
+      },
+      {
+        "type": "credit",
+        "amount": 2550,
+        "description": "Earnings TRP-03168657-36",
+        "trip": "6a88150069b8908abab471ed",
+        "_id": "6a88155869b8908abab471ee",
+        "createdAt": "2026-08-21T09:07:36.016Z"
+      },
+      {
+        "type": "credit",
+        "amount": 1250,
+        "description": "Earnings TRP-03969154-84",
+        "trip": "6a881821ff4ed024ab62d8c3",
+        "_id": "6a88187fff4ed024ab62d8c4",
+        "createdAt": "2026-08-21T09:21:03.203Z"
+      }
+    ],
+    "updatedAt": "2026-08-21T09:21:03.195Z"
+  },
+  {
+    "_id": "6a87e36ea0537ccda9f36554",
+    "user": "6a87e36ea0537ccda9f36551",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-08-21T05:34:38.054Z",
+    "transactions": [],
+    "updatedAt": "2026-08-21T07:46:37.293Z"
+  },
+  {
+    "_id": "6a887c5ba291672cd936c624",
+    "user": "6a887c5ba291672cd936c623",
+    "balance": 100,
+    "transactions": [
+      {
+        "type": "credit",
+        "amount": 100,
+        "description": "Paystack wallet funding",
+        "reference": "KO-WALLET-1787376040433-45AB93E363",
+        "provider": "paystack",
+        "status": "success",
+        "createdAt": "2026-08-22T05:22:02.608Z"
+      }
+    ],
+    "createdAt": "2026-08-21T16:27:07.725Z",
+    "updatedAt": "2026-08-22T05:22:02.594Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a88813e5fe7a51f864d196a",
+    "user": "6a88813e5fe7a51f864d1969",
+    "balance": 1200,
+    "transactions": [
+      {
+        "type": "credit",
+        "amount": 2250,
+        "description": "Wallet ride earnings TRP-34419897-58",
+        "trip": "6a888f135992e7221b84aaad",
+        "reference": "RIDE-EARNING-TRP-34419897-58",
+        "provider": "ride",
+        "status": "paid",
+        "createdAt": "2026-08-21T17:47:53.224Z"
+      },
+      {
+        "type": "debit",
+        "amount": 1000,
+        "description": "Driver withdrawal requested",
+        "reference": "WD-MT3DE79X-UDI72",
+        "provider": "manual_withdrawal",
+        "status": "approved",
+        "createdAt": "2026-08-21T19:56:34.040Z"
+      },
+      {
+        "type": "debit",
+        "amount": 50,
+        "description": "Kaduna Only trip fee TRP-80332001-77",
+        "trip": "6a89426c9f154640946e2e1e",
+        "reference": "PLATFORM-FEE-TRP-80332001-77",
+        "provider": "platform_commission",
+        "status": "paid",
+        "createdAt": "2026-08-22T06:32:41.393Z"
+      }
+    ],
+    "createdAt": "2026-08-21T16:47:58.476Z",
+    "updatedAt": "2026-08-22T06:32:41.384Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a88834da32b5d7f93b57a51",
+    "user": "6a88834da32b5d7f93b57a50",
+    "__v": 0,
+    "balance": 0,
+    "createdAt": "2026-08-21T16:56:45.701Z",
+    "transactions": [],
+    "updatedAt": "2026-08-21T17:06:30.876Z"
+  }
+]

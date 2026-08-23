@@ -1,0 +1,49 @@
+[
+  {
+    "_id": "6a87e36ea0537ccda9f36555",
+    "user": "6a87e36ea0537ccda9f36550",
+    "__v": 0,
+    "createdAt": "2026-08-21T05:34:38.057Z",
+    "online": true,
+    "plateNumber": "KDA-ONLY-01",
+    "rating": 5,
+    "totalTrips": 5,
+    "updatedAt": "2026-08-21T16:46:30.674Z",
+    "vehicleColor": "Black",
+    "vehicleModel": "Keke Napep",
+    "vehicleType": "keke",
+    "verificationStatus": "approved",
+    "location": {
+      "latitude": 9.0567,
+      "longitude": 7.4969,
+      "accuracy": 200000,
+      "updatedAt": "2026-08-21T16:46:30.674Z"
+    }
+  },
+  {
+    "_id": "6a88813e5fe7a51f864d196b",
+    "user": "6a88813e5fe7a51f864d1969",
+    "verificationStatus": "approved",
+    "online": true,
+    "rating": 5,
+    "totalTrips": 2,
+    "vehicleType": "keke",
+    "createdAt": "2026-08-21T16:47:58.479Z",
+    "updatedAt": "2026-08-22T06:32:41.368Z",
+    "__v": 0,
+    "location": {
+      "latitude": 9.0567,
+      "longitude": 7.4969,
+      "accuracy": 200000,
+      "updatedAt": "2026-08-22T06:32:37.358Z"
+    },
+    "plateNumber": "",
+    "vehicleColor": "",
+    "vehicleModel": "",
+    "payoutAccount": {
+      "bankName": "Opay",
+      "accountName": "Muhammad Rabiu Musa",
+      "accountNumber": "8056480413"
+    }
+  }
+]

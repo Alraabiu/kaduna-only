@@ -1,0 +1,1 @@
+{"scripts":{"dev":"nodemon server.js","start":"node server.js","seed":"node seed/seed.js"},"dependencies":{"bcryptjs":"latest","cors":"latest","dotenv":"latest","express":"latest","jsonwebtoken":"latest","mongoose":"latest","morgan":"latest","nodemon":"latest","socket.io":"latest","firebase-admin":"^13.4.0"}}
