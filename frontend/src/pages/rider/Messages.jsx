@@ -1,0 +1,1 @@
+import React from'react';import{MessageCircle}from'lucide-react';import{RiderLayout,PageHeader,Empty}from'../../shared';export default function Messages(){return <RiderLayout><PageHeader title="Messages" subtitle="Trip and support conversations."/><Empty title="No messages" text="Driver and support messaging will appear here when a conversation is created."/></RiderLayout>}

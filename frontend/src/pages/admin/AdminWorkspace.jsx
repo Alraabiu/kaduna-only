@@ -1,0 +1,1 @@
+import React from'react';import{AdminLayout,PageHeader,Empty}from'../../shared';export default function AdminWorkspace(){return <AdminLayout><PageHeader title="Admin Workspace" subtitle="Central operational workspace."/><Empty title="Workspace ready" text="Use the driver, trips, payments and audit sections to manage the platform."/></AdminLayout>}

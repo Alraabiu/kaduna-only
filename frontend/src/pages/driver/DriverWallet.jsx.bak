@@ -1,0 +1,371 @@
+import React,{useEffect,useState}from'react';
+import{Wallet as WalletIcon,ArrowDownLeft,ArrowUpRight,Landmark,Send,RefreshCw}from'lucide-react';
+import{DriverLayout,PageHeader,api,formatMoney,useApp,Button,Badge,Notice}from'../../shared';
+
+export default function DriverWallet(){
+  const{notify}=useApp();
+  const[w,setW]=useState({balance:0,transactions:[]});
+  const[bank,setBank]=useState({bankName:'',accountName:'',accountNumber:''});
+  const[withdrawals,setWithdrawals]=useState([]);
+  const[minimum,setMinimum]=useState(1000);
+  const[platformFee,setPlatformFee]=useState(50);
+  const[outstandingFee,setOutstandingFee]=useState({amount:0,count:0});
+  const[amount,setAmount]=useState('');
+  const[busy,setBusy]=useState(false);
+  const[savingBank,setSavingBank]=useState(false);
+
+  async function load(){
+    try{
+      const[a,b,c]=await Promise.all([
+        api('/wallet'),
+        api('/drivers/bank-account'),
+        api('/drivers/withdrawals')
+      ]);
+
+      setW(a.data.wallet||{balance:0,transactions:[]});
+
+      const saved=b.data.bankAccount||{};
+
+      setBank({
+        bankName:saved.bankName||'',
+        accountName:saved.accountName||'',
+        accountNumber:saved.accountNumber||''
+      });
+
+      setMinimum(
+        c.data.minimumWithdrawal||
+        b.data.minimumWithdrawal||
+        1000
+      );
+
+      setPlatformFee(
+        c.data.platformCommission||
+        b.data.platformCommission||
+        50
+      );
+
+      setOutstandingFee(
+        c.data.outstandingCommission||
+        {amount:0,count:0}
+      );
+
+      setWithdrawals(c.data.withdrawals||[]);
+    }catch(e){
+      notify(e.message);
+    }
+  }
+
+  useEffect(()=>{
+    load();
+  },[]);
+
+  async function saveBank(e){
+    e.preventDefault();
+    setSavingBank(true);
+
+    try{
+      const r=await api('/drivers/bank-account',{
+        method:'PATCH',
+        body:JSON.stringify(bank)
+      });
+
+      setBank(r.data.bankAccount);
+
+      notify({
+        title:'Bank account saved',
+        message:'This account will be used for manual driver withdrawals.',
+        tone:'success'
+      });
+    }catch(e){
+      notify(e.message);
+    }finally{
+      setSavingBank(false);
+    }
+  }
+
+  async function withdraw(e){
+    e.preventDefault();
+    setBusy(true);
+
+    try{
+      await api('/drivers/withdrawals',{
+        method:'POST',
+        body:JSON.stringify({
+          amount:Number(amount)
+        })
+      });
+
+      setAmount('');
+
+      notify({
+        title:'Withdrawal requested',
+        message:'Your funds are reserved while the admin reviews and pays your request.',
+        tone:'success'
+      });
+
+      await load();
+    }catch(e){
+      notify(e.message);
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  const pending=withdrawals.find(
+    x=>['pending','approved'].includes(x.status)
+  );
+
+  return(
+    <DriverLayout>
+      <PageHeader
+        title="Driver Wallet"
+        subtitle="Trip earnings, bank details and withdrawal requests."
+        action={
+          <Button onClick={load} variant="secondary">
+            <RefreshCw size={16}/>
+            Refresh
+          </Button>
+        }
+      />
+
+      <Notice
+        title="Low flat platform fee"
+        text={`Kaduna Only charges only ${formatMoney(platformFee)} on each completed trip. Your wallet earnings already show your net amount after the fee.`}
+        tone="success"
+      />
+
+      {outstandingFee.amount>0&&(
+        <Notice
+          title="Outstanding cash-trip fees"
+          text={`${formatMoney(outstandingFee.amount)} is still due from ${outstandingFee.count} cash trip${outstandingFee.count===1?'':'s'}. The system will collect these fees from your wallet before a withdrawal.`}
+          tone="warning"
+        />
+      )}
+
+      <div className="wallet-hero">
+        <div>
+          <span>Available Balance</span>
+          <strong>{formatMoney(w.balance)}</strong>
+          <small>
+            Withdrawal requests are reserved from this available balance immediately.
+          </small>
+        </div>
+        <WalletIcon size={42}/>
+      </div>
+
+      {pending&&(
+        <Notice
+          title={pending.status==='approved'?'Withdrawal approved':'Withdrawal pending'}
+          text={`${formatMoney(pending.amount)} is currently ${pending.status}. You can submit another withdrawal after this one is completed or rejected.`}
+          tone="warning"
+        />
+      )}
+
+      <div className="withdraw-grid">
+
+        <div className="panel">
+          <div className="panel-title">
+            <div>
+              <h3>Withdrawal bank account</h3>
+              <p>Admin will transfer approved withdrawals to this account.</p>
+            </div>
+            <Landmark size={22}/>
+          </div>
+
+          <form className="form" onSubmit={saveBank}>
+
+            <label>
+              Bank name
+              <input
+                value={bank.bankName}
+                onChange={e=>setBank({...bank,bankName:e.target.value})}
+                placeholder="e.g. Access Bank"
+                required
+              />
+            </label>
+
+            <label>
+              Account name
+              <input
+                value={bank.accountName}
+                onChange={e=>setBank({...bank,accountName:e.target.value})}
+                placeholder="Account holder name"
+                required
+              />
+            </label>
+
+            <label>
+              Account number
+              <input
+                inputMode="numeric"
+                maxLength={10}
+                value={bank.accountNumber}
+                onChange={e=>setBank({
+                  ...bank,
+                  accountNumber:e.target.value.replace(/\D/g,'')
+                })}
+                placeholder="10-digit account number"
+                required
+              />
+            </label>
+
+            <Button type="submit" disabled={savingBank}>
+              {savingBank?'Saving...':'Save Bank Account'}
+            </Button>
+
+          </form>
+        </div>
+
+        <div className="panel">
+          <div className="panel-title">
+            <div>
+              <h3>Withdraw earnings</h3>
+              <p>Minimum withdrawal: {formatMoney(minimum)}</p>
+            </div>
+            <Send size={22}/>
+          </div>
+
+          <form className="form" onSubmit={withdraw}>
+
+            <label>
+              Amount (NGN)
+              <input
+                type="number"
+                min={minimum}
+                step="1"
+                value={amount}
+                onChange={e=>setAmount(e.target.value)}
+                placeholder={String(minimum)}
+                required
+              />
+            </label>
+
+            <div className="withdraw-summary">
+              <span>Available</span>
+              <b>{formatMoney(w.balance)}</b>
+            </div>
+
+            <Button
+              type="submit"
+              full
+              disabled={busy||!!pending||!bank.accountNumber}
+            >
+              {busy?'Submitting...':'Request Withdrawal'}
+            </Button>
+
+            {!bank.accountNumber&&(
+              <small className="muted">
+                Save your bank account before requesting a withdrawal.
+              </small>
+            )}
+
+          </form>
+        </div>
+
+      </div>
+
+      <div className="panel" style={{marginTop:16}}>
+        <h3>Withdrawal history</h3>
+
+        {withdrawals.length?
+          withdrawals.map(x=>(
+            <div className="withdraw-row" key={x._id}>
+
+              <div>
+                <b>{formatMoney(x.amount)}</b>
+
+                <small>
+                  {new Date(x.createdAt).toLocaleString('en-NG')}
+                  {' · '}
+                  {x.bank?.bankName}
+                  {' ••••'}
+                  {x.bank?.accountNumber?.slice(-4)}
+                </small>
+              </div>
+
+              <div className="withdraw-state">
+
+                <Badge
+                  tone={
+                    x.status==='paid'
+                      ?'success'
+                      :x.status==='rejected'
+                        ?'danger'
+                        :'warning'
+                  }
+                >
+                  {x.status}
+                </Badge>
+
+                {x.transferReference&&(
+                  <small>
+                    Ref: {x.transferReference}
+                  </small>
+                )}
+
+              </div>
+
+            </div>
+          ))
+          :
+          <p className="muted">
+            No withdrawal requests yet.
+          </p>
+        }
+
+      </div>
+
+      <div className="panel" style={{marginTop:16}}>
+        <h3>Wallet transactions</h3>
+
+        {w.transactions?.length?
+          w.transactions
+            .slice()
+            .reverse()
+            .map((x,i)=>(
+              <div
+                className="transaction"
+                key={`${x.reference||i}-${i}`}
+              >
+
+                <span
+                  className={
+                    x.type==='credit'
+                      ?'credit'
+                      :'debit'
+                  }
+                >
+                  {x.type==='credit'
+                    ?<ArrowDownLeft/>
+                    :<ArrowUpRight/>
+                  }
+                </span>
+
+                <div>
+                  <b>{x.description}</b>
+
+                  <small>
+                    {new Date(x.createdAt).toLocaleString('en-NG')}
+                    {' · '}
+                    {x.status||'processed'}
+                  </small>
+                </div>
+
+                <strong>
+                  {x.type==='credit'?'+':'-'}
+                  {formatMoney(x.amount)}
+                </strong>
+
+              </div>
+            ))
+          :
+          <p className="muted">
+            No wallet transactions yet.
+          </p>
+        }
+
+      </div>
+
+    </DriverLayout>
+  );
+}

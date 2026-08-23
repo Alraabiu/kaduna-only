@@ -1,0 +1,5 @@
+import React,{useEffect,useState}from'react';
+import{LoaderCircle,Radio}from'lucide-react';
+import{useNavigate}from'react-router-dom';
+import{RiderLayout,PageHeader,api,useApp}from'../../shared';
+export default function Searching(){const{socket}=useApp();const nav=useNavigate();const[status,setStatus]=useState('Searching for nearby drivers…');useEffect(()=>{api('/trips/active').then(r=>{const t=r.data.trip;if(t&&t.status!=='SEARCHING_DRIVER')nav(`/trip/${t._id}`,{replace:true})}).catch(()=>{})},[]);useEffect(()=>{if(!socket)return;const onTrip=p=>{const t=p?.trip;if(!t)return;if(t.status==='DRIVER_ASSIGNED'){setStatus('Driver found. Opening your trip…');setTimeout(()=>nav(`/trip/${t._id}`,{replace:true}),500)}};socket.on('trip:updated',onTrip);return()=>socket.off('trip:updated',onTrip)},[socket]);return <RiderLayout><PageHeader title="Connecting you to a driver" subtitle="Your request is being matched in real time."/><div className="panel empty"><LoaderCircle className="spin" size={42}/><h3>{status}</h3><p><Radio size={15}/> You can keep this page open. No manual refresh is required.</p></div></RiderLayout>}

@@ -1,0 +1,1 @@
+import React from'react';import{AdminLayout,PageHeader,Empty}from'../../shared';export default function AdminNotifications(){return <AdminLayout><PageHeader title="Notifications" subtitle="Operational notifications."/><Empty title="No pending notifications" text="System notifications will appear here as the platform grows."/></AdminLayout>}

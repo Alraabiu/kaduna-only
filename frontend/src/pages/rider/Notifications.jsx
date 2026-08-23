@@ -1,0 +1,1 @@
+import React from'react';import{Bell}from'lucide-react';import{RiderLayout,PageHeader,Empty}from'../../shared';export default function Notifications(){return <RiderLayout><PageHeader title="Notifications" subtitle="Updates about your account and trips."/><Empty title="You're all caught up" text="New trip and account notifications will appear here."/></RiderLayout>}
