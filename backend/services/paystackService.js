@@ -2,6 +2,13 @@ const crypto = require('crypto');
 const Payment = require('../models/Payment');
 const Wallet = require('../models/Wallet');
 
+
+/*
+ * =========================================================
+ * PAYSTACK CONFIGURATION
+ * =========================================================
+ */
+
 function secret() {
   const key = String(
     process.env.PAYSTACK_SECRET_KEY || ''
@@ -9,14 +16,18 @@ function secret() {
 
   if (!key) {
     throw Object.assign(
-      new Error('Paystack is not configured on the server'),
+      new Error(
+        'Paystack is not configured on the server'
+      ),
       { statusCode: 503 }
     );
   }
 
   if (!/^sk_(test|live)_/.test(key)) {
     throw Object.assign(
-      new Error('PAYSTACK_SECRET_KEY is invalid'),
+      new Error(
+        'PAYSTACK_SECRET_KEY is invalid'
+      ),
       { statusCode: 503 }
     );
   }
@@ -26,40 +37,47 @@ function secret() {
 
 
 /*
- * ---------------------------------------------------------
- * PAYSTACK HTTP CLIENT
- * ---------------------------------------------------------
+ * =========================================================
+ * PAYSTACK API REQUEST
+ * =========================================================
  */
 
 async function request(path, options = {}) {
-  const res = await fetch(
+  const response = await fetch(
     `https://api.paystack.co${path}`,
     {
       ...options,
+
       headers: {
         Authorization: `Bearer ${secret()}`,
         'Content-Type': 'application/json',
+
         ...(options.headers || {})
       }
     }
   );
 
-  const body = await res
-    .json()
-    .catch(() => ({
-      status: false,
-      message: 'Invalid response from Paystack'
-    }));
+  const body =
+    await response
+      .json()
+      .catch(() => ({
+        status: false,
+        message:
+          'Invalid response from Paystack'
+      }));
 
-  if (!res.ok || !body.status) {
-    const err = new Error(
+  if (
+    !response.ok ||
+    !body.status
+  ) {
+    const error = new Error(
       body.message ||
-      `Paystack request failed (${res.status})`
+      `Paystack request failed (${response.status})`
     );
 
-    err.statusCode = 502;
+    error.statusCode = 502;
 
-    throw err;
+    throw error;
   }
 
   return body;
@@ -67,16 +85,19 @@ async function request(path, options = {}) {
 
 
 /*
- * ---------------------------------------------------------
- * RIDER WALLET TOP-UP
- * ---------------------------------------------------------
+ * =========================================================
+ * WALLET TOP-UP
+ * =========================================================
  */
 
 function newReference() {
-  return `KO-WALLET-${Date.now()}-${crypto
-    .randomBytes(5)
-    .toString('hex')
-    .toUpperCase()}`;
+  return (
+    `KO-WALLET-${Date.now()}-` +
+    crypto
+      .randomBytes(5)
+      .toString('hex')
+      .toUpperCase()
+  );
 }
 
 
@@ -84,11 +105,10 @@ async function initializeWalletTopup({
   user,
   amount
 }) {
-  const email = String(
-    user.email || ''
-  )
-    .trim()
-    .toLowerCase();
+  const email =
+    String(user.email || '')
+      .trim()
+      .toLowerCase();
 
   if (!email) {
     throw Object.assign(
@@ -99,40 +119,52 @@ async function initializeWalletTopup({
     );
   }
 
-  const reference = newReference();
+  const reference =
+    newReference();
 
-  const callbackBase = String(
-    process.env.CLIENT_URL ||
-    'http://localhost:5173'
-  ).replace(/\/$/, '');
+  const callbackBase =
+    String(
+      process.env.CLIENT_URL ||
+      'http://localhost:5173'
+    ).replace(/\/$/, '');
 
-  const body = await request(
-    '/transaction/initialize',
-    {
-      method: 'POST',
+  const body =
+    await request(
+      '/transaction/initialize',
+      {
+        method: 'POST',
 
-      body: JSON.stringify({
-        email,
+        body: JSON.stringify({
+          email,
 
-        amount: String(
-          Math.round(Number(amount) * 100)
-        ),
+          amount:
+            String(
+              Math.round(
+                Number(amount) * 100
+              )
+            ),
 
-        currency: 'NGN',
+          currency: 'NGN',
 
-        reference,
+          reference,
 
-        callback_url:
-          `${callbackBase}/wallet/paystack/callback`,
+          callback_url:
+            `${callbackBase}/wallet/paystack/callback`,
 
-        metadata: JSON.stringify({
-          purpose: 'wallet_topup',
-          userId: String(user._id),
-          phone: user.phone || ''
+          metadata:
+            JSON.stringify({
+              purpose:
+                'wallet_topup',
+
+              userId:
+                String(user._id),
+
+              phone:
+                user.phone || ''
+            })
         })
-      })
-    }
-  );
+      }
+    );
 
   await Payment.create({
     user: user._id,
@@ -166,11 +198,11 @@ async function initializeWalletTopup({
 }
 
 
-async function verifyReference(reference) {
+async function verifyReference(
+  reference
+) {
   return request(
-    `/transaction/verify/${encodeURIComponent(
-      reference
-    )}`,
+    `/transaction/verify/${encodeURIComponent(reference)}`,
     {
       method: 'GET'
     }
@@ -178,13 +210,21 @@ async function verifyReference(reference) {
 }
 
 
+/*
+ * =========================================================
+ * COMPLETE WALLET TOP-UP
+ * =========================================================
+ */
+
 async function fulfillWalletTopup(
   payment,
   paystackData
 ) {
   if (!payment) {
     throw Object.assign(
-      new Error('Payment record not found'),
+      new Error(
+        'Payment record not found'
+      ),
       { statusCode: 404 }
     );
   }
@@ -199,16 +239,16 @@ async function fulfillWalletTopup(
     payment.reference
   ) {
     throw Object.assign(
-      new Error('Payment reference mismatch'),
+      new Error(
+        'Payment reference mismatch'
+      ),
       { statusCode: 400 }
     );
   }
 
-  /*
-   * Payment is not successful.
-   */
   if (
-    paystackData.status !== 'success'
+    paystackData.status !==
+    'success'
   ) {
     await Payment.updateOne(
       {
@@ -216,15 +256,16 @@ async function fulfillWalletTopup(
       },
       {
         $set: {
-          status: [
-            'failed',
-            'abandoned',
-            'reversed'
-          ].includes(
-            paystackData.status
-          )
-            ? paystackData.status
-            : 'pending',
+          status:
+            [
+              'failed',
+              'abandoned',
+              'reversed'
+            ].includes(
+              paystackData.status
+            )
+              ? paystackData.status
+              : 'pending',
 
           gatewayResponse:
             paystackData.gateway_response ||
@@ -235,13 +276,12 @@ async function fulfillWalletTopup(
 
     return {
       credited: false,
-      status: paystackData.status
+
+      status:
+        paystackData.status
     };
   }
 
-  /*
-   * Verify exact amount.
-   */
   if (
     Number(paystackData.amount) !==
     expectedKobo
@@ -254,9 +294,6 @@ async function fulfillWalletTopup(
     );
   }
 
-  /*
-   * Verify currency.
-   */
   if (
     String(
       paystackData.currency || 'NGN'
@@ -270,9 +307,6 @@ async function fulfillWalletTopup(
     );
   }
 
-  /*
-   * Atomic idempotent wallet credit.
-   */
   const wallet =
     await Wallet.findOneAndUpdate(
       {
@@ -285,14 +319,16 @@ async function fulfillWalletTopup(
 
       {
         $inc: {
-          balance: payment.amount
+          balance:
+            payment.amount
         },
 
         $push: {
           transactions: {
             type: 'credit',
 
-            amount: payment.amount,
+            amount:
+              payment.amount,
 
             description:
               'Paystack wallet funding',
@@ -310,8 +346,11 @@ async function fulfillWalletTopup(
       },
 
       {
-        returnDocument: 'after',
-        upsert: false
+        returnDocument:
+          'after',
+
+        upsert:
+          false
       }
     );
 
@@ -340,7 +379,8 @@ async function fulfillWalletTopup(
           paystackData.channel || '',
 
         gatewayResponse:
-          paystackData.gateway_response || '',
+          paystackData.gateway_response ||
+          '',
 
         paystackTransactionId:
           String(
@@ -361,26 +401,32 @@ async function fulfillWalletTopup(
   );
 
   return {
-    credited: !!wallet,
+    credited:
+      !!wallet,
 
-    status: 'success',
+    status:
+      'success',
 
-    wallet: existingWallet
+    wallet:
+      existingWallet
   };
 }
 
 
 /*
- * ---------------------------------------------------------
- * PAYSTACK WEBHOOK SIGNATURE
- * ---------------------------------------------------------
+ * =========================================================
+ * WEBHOOK SIGNATURE
+ * =========================================================
  */
 
 function validWebhookSignature(
   rawBody,
   signature
 ) {
-  if (!rawBody || !signature) {
+  if (
+    !rawBody ||
+    !signature
+  ) {
     return false;
   }
 
@@ -393,29 +439,17 @@ function validWebhookSignature(
       .update(rawBody)
       .digest('hex');
 
-  const expected =
-    Buffer.from(
-      hash,
-      'utf8'
-    );
-
-  const received =
-    Buffer.from(
-      String(signature),
-      'utf8'
-    );
-
-  if (
-    expected.length !==
-    received.length
-  ) {
-    return false;
-  }
-
   try {
     return crypto.timingSafeEqual(
-      expected,
-      received
+      Buffer.from(
+        hash,
+        'utf8'
+      ),
+
+      Buffer.from(
+        String(signature),
+        'utf8'
+      )
     );
   } catch {
     return false;
@@ -424,16 +458,9 @@ function validWebhookSignature(
 
 
 /*
- * ---------------------------------------------------------
- * PLATFORM BANK ACCOUNT
- * ---------------------------------------------------------
- */
-
-/*
- * Resolve Nigerian bank account.
- *
- * This only verifies the account.
- * It does NOT transfer money.
+ * =========================================================
+ * BANK ACCOUNT VERIFICATION
+ * =========================================================
  */
 
 async function resolveBankAccount({
@@ -441,20 +468,23 @@ async function resolveBankAccount({
   bankCode
 }) {
   const account =
-    String(accountNumber || '')
+    String(
+      accountNumber || ''
+    )
       .replace(/\s+/g, '')
       .trim();
 
   const code =
-    String(bankCode || '')
-      .trim();
+    String(
+      bankCode || ''
+    ).trim();
 
   if (
     !/^\d{10}$/.test(account)
   ) {
     throw Object.assign(
       new Error(
-        'Bank account number must be exactly 10 digits'
+        'Account number must be exactly 10 digits'
       ),
       { statusCode: 400 }
     );
@@ -470,11 +500,7 @@ async function resolveBankAccount({
   }
 
   return request(
-    `/bank/resolve?account_number=${encodeURIComponent(
-      account
-    )}&bank_code=${encodeURIComponent(
-      code
-    )}`,
+    `/bank/resolve?account_number=${encodeURIComponent(account)}&account_name=&bank_code=${encodeURIComponent(code)}`,
     {
       method: 'GET'
     }
@@ -483,9 +509,9 @@ async function resolveBankAccount({
 
 
 /*
- * ---------------------------------------------------------
- * PAYSTACK TRANSFER RECIPIENT
- * ---------------------------------------------------------
+ * =========================================================
+ * CREATE PAYSTACK TRANSFER RECIPIENT
+ * =========================================================
  */
 
 async function createTransferRecipient({
@@ -494,19 +520,7 @@ async function createTransferRecipient({
   bankCode,
   currency = 'NGN'
 }) {
-  const name =
-    String(accountName || '')
-      .trim();
-
-  const account =
-    String(accountNumber || '')
-      .replace(/\s+/g, '');
-
-  const code =
-    String(bankCode || '')
-      .trim();
-
-  if (!name) {
+  if (!accountName) {
     throw Object.assign(
       new Error(
         'Account name is required'
@@ -516,17 +530,20 @@ async function createTransferRecipient({
   }
 
   if (
-    !/^\d{10}$/.test(account)
+    !/^\d{10}$/.test(
+      String(accountNumber)
+        .replace(/\s+/g, '')
+    )
   ) {
     throw Object.assign(
       new Error(
-        'Bank account number must be exactly 10 digits'
+        'Account number must be exactly 10 digits'
       ),
       { statusCode: 400 }
     );
   }
 
-  if (!code) {
+  if (!bankCode) {
     throw Object.assign(
       new Error(
         'Bank code is required'
@@ -543,15 +560,27 @@ async function createTransferRecipient({
       body: JSON.stringify({
         type: 'nuban',
 
-        name,
+        name:
+          String(
+            accountName
+          ).trim(),
 
         account_number:
-          account,
+          String(
+            accountNumber
+          )
+            .replace(/\s+/g, '')
+            .trim(),
 
         bank_code:
-          code,
+          String(
+            bankCode
+          ).trim(),
 
-        currency
+        currency:
+          String(
+            currency || 'NGN'
+          ).toUpperCase()
       })
     }
   );
@@ -559,35 +588,46 @@ async function createTransferRecipient({
 
 
 /*
- * ---------------------------------------------------------
- * PLATFORM COMMISSION TRANSFER
- * ---------------------------------------------------------
+ * =========================================================
+ * TRANSFER REFERENCE
+ * =========================================================
  */
 
+function newTransferReference() {
+  return (
+    `KO-COMMISSION-${Date.now()}-` +
+    crypto
+      .randomBytes(5)
+      .toString('hex')
+      .toUpperCase()
+  );
+}
+
+
 /*
- * This is the function that actually
- * initiates the transfer.
- *
- * Input amount is whole NGN.
- * Paystack receives kobo.
+ * =========================================================
+ * INITIATE PLATFORM COMMISSION TRANSFER
+ * =========================================================
  */
 
 async function initiateTransfer({
   amount,
   recipientCode,
-  reason,
-  reference
+  reference,
+  reason
 }) {
-  const naira =
+  const numericAmount =
     Number(amount);
 
   if (
-    !Number.isInteger(naira) ||
-    naira <= 0
+    !Number.isFinite(
+      numericAmount
+    ) ||
+    numericAmount <= 0
   ) {
     throw Object.assign(
       new Error(
-        'Transfer amount must be a positive whole naira amount'
+        'Transfer amount must be greater than zero'
       ),
       { statusCode: 400 }
     );
@@ -621,19 +661,17 @@ async function initiateTransfer({
 
         amount:
           Math.round(
-            naira * 100
+            numericAmount * 100
           ),
 
         recipient:
           recipientCode,
 
-        reason:
-          reason ||
-          'Kaduna Only platform commission withdrawal',
-
         reference,
 
-        currency: 'NGN'
+        reason:
+          reason ||
+          'Kaduna Only platform commission withdrawal'
       })
     }
   );
@@ -641,9 +679,9 @@ async function initiateTransfer({
 
 
 /*
- * ---------------------------------------------------------
- * VERIFY PLATFORM TRANSFER
- * ---------------------------------------------------------
+ * =========================================================
+ * VERIFY TRANSFER
+ * =========================================================
  */
 
 async function verifyTransfer(
@@ -659,9 +697,7 @@ async function verifyTransfer(
   }
 
   return request(
-    `/transfer/verify/${encodeURIComponent(
-      reference
-    )}`,
+    `/transfer/verify/${encodeURIComponent(reference)}`,
     {
       method: 'GET'
     }
@@ -670,39 +706,30 @@ async function verifyTransfer(
 
 
 /*
- * ---------------------------------------------------------
- * TRANSFER REFERENCE
- * ---------------------------------------------------------
- */
-
-function newTransferReference() {
-  return `KO-PLATFORM-WD-${Date.now()}-${crypto
-    .randomBytes(5)
-    .toString('hex')
-    .toUpperCase()}`;
-}
-
-
-/*
- * ---------------------------------------------------------
+ * =========================================================
  * PAYSTACK MODE
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 function mode() {
   const key =
     String(
-      process.env.PAYSTACK_SECRET_KEY || ''
+      process.env.PAYSTACK_SECRET_KEY ||
+      ''
     );
 
   if (
-    key.startsWith('sk_live_')
+    key.startsWith(
+      'sk_live_'
+    )
   ) {
     return 'live';
   }
 
   if (
-    key.startsWith('sk_test_')
+    key.startsWith(
+      'sk_test_'
+    )
   ) {
     return 'test';
   }
@@ -712,24 +739,30 @@ function mode() {
 
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * EXPORTS
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 module.exports = {
+
+  // Wallet
   initializeWalletTopup,
   verifyReference,
   fulfillWalletTopup,
 
+  // Webhook
   validWebhookSignature,
 
+  // Bank
   resolveBankAccount,
-  createTransferRecipient,
 
+  // Transfers
+  createTransferRecipient,
   initiateTransfer,
   verifyTransfer,
   newTransferReference,
 
+  // Mode
   mode
 };
