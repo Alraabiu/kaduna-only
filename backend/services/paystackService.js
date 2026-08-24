@@ -51,7 +51,6 @@ async function request(path, options = {}) {
       headers: {
         Authorization: `Bearer ${secret()}`,
         'Content-Type': 'application/json',
-
         ...(options.headers || {})
       }
     }
@@ -86,7 +85,30 @@ async function request(path, options = {}) {
 
 /*
  * =========================================================
- * WALLET TOP-UP
+ * PAYSTACK BANK CACHE
+ * =========================================================
+ *
+ * Nigerian banks do not need to be fetched from Paystack
+ * every time the admin opens the commission page.
+ *
+ * Cache duration:
+ * 6 hours.
+ *
+ * The cache is process-local. A new Render deployment will
+ * naturally refresh it.
+ * =========================================================
+ */
+
+let bankCache = null;
+let bankCacheExpiresAt = 0;
+
+const BANK_CACHE_TTL =
+  6 * 60 * 60 * 1000;
+
+
+/*
+ * =========================================================
+ * WALLET TOP-UP REFERENCE
  * =========================================================
  */
 
@@ -101,6 +123,12 @@ function newReference() {
 }
 
 
+/*
+ * =========================================================
+ * WALLET TOP-UP
+ * =========================================================
+ */
+
 async function initializeWalletTopup({
   user,
   amount
@@ -114,6 +142,21 @@ async function initializeWalletTopup({
     throw Object.assign(
       new Error(
         'Add an email address to your rider profile before funding your wallet'
+      ),
+      { statusCode: 400 }
+    );
+  }
+
+  const numericAmount =
+    Number(amount);
+
+  if (
+    !Number.isFinite(numericAmount) ||
+    numericAmount <= 0
+  ) {
+    throw Object.assign(
+      new Error(
+        'Wallet funding amount must be greater than zero'
       ),
       { statusCode: 400 }
     );
@@ -140,7 +183,7 @@ async function initializeWalletTopup({
           amount:
             String(
               Math.round(
-                Number(amount) * 100
+                numericAmount * 100
               )
             ),
 
@@ -174,7 +217,8 @@ async function initializeWalletTopup({
     accessCode:
       body.data.access_code,
 
-    amount,
+    amount:
+      numericAmount,
 
     currency: 'NGN',
 
@@ -198,9 +242,24 @@ async function initializeWalletTopup({
 }
 
 
+/*
+ * =========================================================
+ * VERIFY WALLET PAYMENT
+ * =========================================================
+ */
+
 async function verifyReference(
   reference
 ) {
+  if (!reference) {
+    throw Object.assign(
+      new Error(
+        'Payment reference is required'
+      ),
+      { statusCode: 400 }
+    );
+  }
+
   return request(
     `/transaction/verify/${encodeURIComponent(reference)}`,
     {
@@ -226,6 +285,15 @@ async function fulfillWalletTopup(
         'Payment record not found'
       ),
       { statusCode: 404 }
+    );
+  }
+
+  if (!paystackData) {
+    throw Object.assign(
+      new Error(
+        'Paystack transaction data is required'
+      ),
+      { statusCode: 400 }
     );
   }
 
@@ -415,7 +483,7 @@ async function fulfillWalletTopup(
 
 /*
  * =========================================================
- * WEBHOOK SIGNATURE
+ * PAYSTACK WEBHOOK SIGNATURE
  * =========================================================
  */
 
@@ -454,6 +522,128 @@ function validWebhookSignature(
   } catch {
     return false;
   }
+}
+
+
+/*
+ * =========================================================
+ * LIST NIGERIAN BANKS
+ * =========================================================
+ *
+ * Used by the Admin Platform Commission page.
+ *
+ * The frontend should NOT ask the administrator to manually
+ * remember bank codes such as 044, 058, etc.
+ *
+ * Instead:
+ *
+ *     Paystack → bank list → frontend dropdown
+ *
+ * The selected bank's code is then used internally for
+ * account verification and transfer-recipient creation.
+ * =========================================================
+ */
+
+async function listNigerianBanks({
+  forceRefresh = false
+} = {}) {
+  const now = Date.now();
+
+  if (
+    !forceRefresh &&
+    Array.isArray(bankCache) &&
+    now < bankCacheExpiresAt
+  ) {
+    return {
+      status: true,
+      data: bankCache
+    };
+  }
+
+  const response =
+    await request(
+      '/bank?country=nigeria&currency=NGN&perPage=100',
+      {
+        method: 'GET'
+      }
+    );
+
+  const banks =
+    Array.isArray(response.data)
+      ? response.data
+          .filter(bank =>
+            bank &&
+            bank.active !== false &&
+            bank.is_deleted !== true
+          )
+          .map(bank => ({
+            name:
+              String(
+                bank.name || ''
+              ).trim(),
+
+            code:
+              String(
+                bank.code || ''
+              ).trim(),
+
+            slug:
+              String(
+                bank.slug || ''
+              ).trim(),
+
+            type:
+              String(
+                bank.type ||
+                'nuban'
+              ).trim(),
+
+            currency:
+              String(
+                bank.currency ||
+                'NGN'
+              ).trim()
+              .toUpperCase()
+          }))
+          .filter(bank =>
+            bank.name &&
+            bank.code
+          )
+      : [];
+
+  banks.sort(
+    (a, b) =>
+      a.name.localeCompare(
+        b.name
+      )
+  );
+
+  bankCache = banks;
+
+  bankCacheExpiresAt =
+    Date.now() +
+    BANK_CACHE_TTL;
+
+  return {
+    status: true,
+    data: banks
+  };
+}
+
+
+/*
+ * =========================================================
+ * CLEAR BANK CACHE
+ * =========================================================
+ *
+ * Useful if Paystack changes the bank directory and the
+ * application needs to refresh immediately.
+ * =========================================================
+ */
+
+function clearBankCache() {
+  bankCache = null;
+  bankCacheExpiresAt = 0;
 }
 
 
@@ -500,7 +690,11 @@ async function resolveBankAccount({
   }
 
   return request(
-    `/bank/resolve?account_number=${encodeURIComponent(account)}&account_name=&bank_code=${encodeURIComponent(code)}`,
+    `/bank/resolve?account_number=${encodeURIComponent(
+      account
+    )}&account_name=&bank_code=${encodeURIComponent(
+      code
+    )}`,
     {
       method: 'GET'
     }
@@ -520,7 +714,24 @@ async function createTransferRecipient({
   bankCode,
   currency = 'NGN'
 }) {
-  if (!accountName) {
+  const cleanAccount =
+    String(
+      accountNumber || ''
+    )
+      .replace(/\s+/g, '')
+      .trim();
+
+  const cleanName =
+    String(
+      accountName || ''
+    ).trim();
+
+  const cleanBankCode =
+    String(
+      bankCode || ''
+    ).trim();
+
+  if (!cleanName) {
     throw Object.assign(
       new Error(
         'Account name is required'
@@ -531,8 +742,7 @@ async function createTransferRecipient({
 
   if (
     !/^\d{10}$/.test(
-      String(accountNumber)
-        .replace(/\s+/g, '')
+      cleanAccount
     )
   ) {
     throw Object.assign(
@@ -543,7 +753,7 @@ async function createTransferRecipient({
     );
   }
 
-  if (!bankCode) {
+  if (!cleanBankCode) {
     throw Object.assign(
       new Error(
         'Bank code is required'
@@ -561,26 +771,19 @@ async function createTransferRecipient({
         type: 'nuban',
 
         name:
-          String(
-            accountName
-          ).trim(),
+          cleanName,
 
         account_number:
-          String(
-            accountNumber
-          )
-            .replace(/\s+/g, '')
-            .trim(),
+          cleanAccount,
 
         bank_code:
-          String(
-            bankCode
-          ).trim(),
+          cleanBankCode,
 
         currency:
           String(
             currency || 'NGN'
-          ).toUpperCase()
+          )
+            .toUpperCase()
       })
     }
   );
@@ -589,7 +792,7 @@ async function createTransferRecipient({
 
 /*
  * =========================================================
- * TRANSFER REFERENCE
+ * PLATFORM COMMISSION TRANSFER REFERENCE
  * =========================================================
  */
 
@@ -680,7 +883,7 @@ async function initiateTransfer({
 
 /*
  * =========================================================
- * VERIFY TRANSFER
+ * VERIFY PLATFORM COMMISSION TRANSFER
  * =========================================================
  */
 
@@ -697,7 +900,9 @@ async function verifyTransfer(
   }
 
   return request(
-    `/transfer/verify/${encodeURIComponent(reference)}`,
+    `/transfer/verify/${encodeURIComponent(
+      reference
+    )}`,
     {
       method: 'GET'
     }
@@ -716,7 +921,7 @@ function mode() {
     String(
       process.env.PAYSTACK_SECRET_KEY ||
       ''
-    );
+    ).trim();
 
   if (
     key.startsWith(
@@ -754,7 +959,9 @@ module.exports = {
   // Webhook
   validWebhookSignature,
 
-  // Bank
+  // Banks
+  listNigerianBanks,
+  clearBankCache,
   resolveBankAccount,
 
   // Transfers
