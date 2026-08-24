@@ -32,17 +32,6 @@ const app = express();
    HTTP CONFIGURATION
 ========================================================= */
 
-/*
- * Allow the frontend running on:
- *
- * localhost
- * 127.0.0.1
- * your computer's LAN IP
- * your phone on the same Wi-Fi network
- *
- * credentials remain enabled for authenticated requests.
- */
-
 app.use(
   cors({
     origin: true,
@@ -50,7 +39,30 @@ app.use(
   })
 );
 
-app.use(express.json());
+/*
+ * IMPORTANT:
+ *
+ * Paystack webhook signature verification requires
+ * the ORIGINAL request body.
+ *
+ * Express normally parses JSON and removes access
+ * to the original raw bytes.
+ *
+ * We preserve those bytes only for the Paystack webhook.
+ */
+
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      if (
+        req.originalUrl ===
+        '/api/payments/paystack/webhook'
+      ) {
+        req.rawBody = Buffer.from(buf);
+      }
+    }
+  })
+);
 
 app.use(morgan('dev'));
 
@@ -145,20 +157,6 @@ app.use((err, req, res, next) => {
 const server =
   http.createServer(app);
 
-/*
- * IMPORTANT FOR PHONE ACCESS
- *
- * 0.0.0.0 means:
- *
- * - localhost works on the PC
- * - 127.0.0.1 works on the PC
- * - LAN IP works from another device
- * - phone can reach the backend when both
- *   devices are on the same Wi-Fi network
- *
- * The actual listen() call is configured below.
- */
-
 const io =
   new Server(server, {
     cors: {
@@ -182,9 +180,6 @@ const io =
     allowEIO3: true
   });
 
-/*
- * Make Socket.IO available to realtime.js.
- */
 setIO(io);
 
 /* =========================================================
@@ -415,16 +410,10 @@ io.on(
       `[SOCKET CONNECTED] ${user.role} ${user.fullName} (${userId})`
     );
 
-    /*
-     * Personal room.
-     */
     socket.join(
       `user:${userId}`
     );
 
-    /*
-     * Role room.
-     */
     socket.join(
       `role:${user.role}`
     );
@@ -563,10 +552,6 @@ io.on(
             );
           }
 
-          /*
-           * Remove from all vehicle rooms.
-           */
-
           for (
             const room of [
               'bike',
@@ -583,11 +568,6 @@ io.on(
               room
             );
           }
-
-          /*
-           * Rejoin the correct vehicle room
-           * when online.
-           */
 
           if (
             profile.online
@@ -607,10 +587,6 @@ io.on(
             vehicleType:
               profile.vehicleType
           });
-
-          /*
-           * Update admin immediately.
-           */
 
           await broadcastDriverSnapshot();
 
@@ -690,11 +666,6 @@ io.on(
             );
           }
 
-          /*
-           * Only approved drivers
-           * can publish GPS.
-           */
-
           const profile =
             await DriverProfile.findOneAndUpdate(
               {
@@ -739,10 +710,6 @@ io.on(
             );
           }
 
-          /*
-           * Find driver's active trip.
-           */
-
           const active =
             await Trip.findOne({
               driver:
@@ -761,10 +728,6 @@ io.on(
                 '_id tripId rider vehicleType pickup destination fare status arrivalStatus'
               );
 
-          /*
-           * Process destination arrival.
-           */
-
           let arrival =
             null;
 
@@ -782,10 +745,6 @@ io.on(
                 accuracy
               });
           }
-
-          /*
-           * Broadcast driver position.
-           */
 
           emitDriverLocation({
 
@@ -821,10 +780,6 @@ io.on(
               active ||
               null
           });
-
-          /*
-           * Tell driver GPS update succeeded.
-           */
 
           ack({
 
@@ -891,13 +846,6 @@ const port =
   Number(
     process.env.PORT
   ) || 5000;
-
-/*
- * IMPORTANT:
- *
- * 0.0.0.0 exposes the backend to devices
- * on the same local network.
- */
 
 const HOST =
   process.env.HOST ||

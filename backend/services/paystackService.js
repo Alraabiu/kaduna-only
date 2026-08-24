@@ -69,10 +69,24 @@ async function fulfillWalletTopup(payment,paystackData){
   return {credited:!!wallet,status:'success',wallet:existingWallet};
 }
 
-function validWebhookSignature(body,signature){
-  if(!signature)return false;
-  const hash=crypto.createHmac('sha512',secret()).update(JSON.stringify(body)).digest('hex');
-  try{return crypto.timingSafeEqual(Buffer.from(hash),Buffer.from(String(signature)))}catch{return false}
+function validWebhookSignature(rawBody, signature) {
+  if (!rawBody || !signature) {
+    return false;
+  }
+
+  const hash = crypto
+    .createHmac('sha512', secret())
+    .update(rawBody)
+    .digest('hex');
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(hash, 'utf8'),
+      Buffer.from(String(signature), 'utf8')
+    );
+  } catch {
+    return false;
+  }
 }
 
 function mode(){const key=String(process.env.PAYSTACK_SECRET_KEY||'');return key.startsWith('sk_live_')?'live':key.startsWith('sk_test_')?'test':'unconfigured'}

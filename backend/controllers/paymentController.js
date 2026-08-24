@@ -2,7 +2,14 @@ const Payment=require('../models/Payment');
 const {validWebhookSignature,fulfillWalletTopup}=require('../services/paystackService');
 async function paystackWebhook(req,res){
   try{
-    if(!validWebhookSignature(req.body,req.headers['x-paystack-signature']))return res.status(401).send('invalid signature');
+    if (
+  !validWebhookSignature(
+    req.rawBody,
+    req.headers['x-paystack-signature']
+  )
+) {
+  return res.status(401).send('invalid signature');
+}
     res.sendStatus(200);
     if(req.body?.event!=='charge.success')return;
     const data=req.body.data||{};const payment=await Payment.findOne({reference:data.reference});if(!payment)return;
