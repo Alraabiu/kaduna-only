@@ -1,26 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  RefreshCw,
-  Landmark,
   Wallet,
   Banknote,
-  Clock3,
   CheckCircle2,
+  Clock3,
+  Landmark,
   ShieldCheck,
+  Building2,
   Send,
   History,
-  Building2
+  RefreshCw,
+  ChevronDown
 } from 'lucide-react';
 
 import {
+  api,
+  useApp,
   AdminLayout,
   PageHeader,
-  Stat,
-  api,
-  formatMoney,
   Button,
   Badge,
-  useApp
+  Stat,
+  formatMoney
 } from '../../shared';
 
 export default function AdminPlatformRevenue() {
@@ -35,36 +36,40 @@ export default function AdminPlatformRevenue() {
   });
 
   const [bankAccount, setBankAccount] = useState(null);
-
+  const [banks, setBanks] = useState([]);
   const [revenue, setRevenue] = useState([]);
-
   const [withdrawals, setWithdrawals] = useState([]);
 
-  const [amount, setAmount] = useState('');
-
   const [bankName, setBankName] = useState('');
-
   const [bankCode, setBankCode] = useState('');
-
   const [accountNumber, setAccountNumber] = useState('');
+  const [verifiedAccountName, setVerifiedAccountName] = useState('');
 
-  const [verifiedAccountName, setVerifiedAccountName] =
-    useState('');
+  const [selectedBank, setSelectedBank] = useState(null);
 
+  const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState('');
 
-  async function loadAll() {
-    try {
-      setBusy('load');
+  /*
+   * -------------------------------------------------------
+   * LOAD ALL DATA
+   * -------------------------------------------------------
+   */
 
+  async function loadAll() {
+    setBusy('load');
+
+    try {
       const [
         summaryResponse,
         bankResponse,
+        banksResponse,
         revenueResponse,
         withdrawalsResponse
       ] = await Promise.all([
         api('/admin/platform-revenue'),
         api('/admin/platform-revenue/bank-account'),
+        api('/admin/platform-revenue/banks'),
         api('/admin/platform-revenue/history'),
         api('/admin/platform-revenue/withdrawals')
       ]);
@@ -83,6 +88,12 @@ export default function AdminPlatformRevenue() {
         bankResponse.data?.bankAccount || null
       );
 
+      const bankList =
+        banksResponse.data?.banks ||
+        [];
+
+      setBanks(bankList);
+
       setRevenue(
         revenueResponse.data?.revenue || []
       );
@@ -90,6 +101,45 @@ export default function AdminPlatformRevenue() {
       setWithdrawals(
         withdrawalsResponse.data?.withdrawals || []
       );
+
+      /*
+       * Restore saved bank account into
+       * the form when one exists.
+       *
+       * The bank code is stored internally,
+       * but is never shown to the admin.
+       */
+      if (bankResponse.data?.bankAccount) {
+        const saved =
+          bankResponse.data.bankAccount;
+
+        setBankName(
+          saved.bankName || ''
+        );
+
+        setBankCode(
+          saved.bankCode || ''
+        );
+
+        setAccountNumber(
+          saved.accountNumber || ''
+        );
+
+        setVerifiedAccountName(
+          saved.accountName || ''
+        );
+
+        const matched =
+          bankList.find(
+            bank =>
+              String(bank.code) ===
+              String(saved.bankCode)
+          );
+
+        setSelectedBank(
+          matched || null
+        );
+      }
     } catch (e) {
       notify(e.message);
     } finally {
@@ -103,6 +153,50 @@ export default function AdminPlatformRevenue() {
 
   /*
    * -------------------------------------------------------
+   * BANK SELECTION
+   * -------------------------------------------------------
+   */
+
+  function handleBankChange(event) {
+    const code = event.target.value;
+
+    const bank =
+      banks.find(
+        item =>
+          String(item.code) ===
+          String(code)
+      );
+
+    setSelectedBank(bank || null);
+
+    setBankName(
+      bank?.name || ''
+    );
+
+    /*
+     * Bank code is kept in state only.
+     * It is NEVER rendered as an input.
+     */
+    setBankCode(
+      bank?.code || ''
+    );
+
+    /*
+     * Changing bank invalidates a previous
+     * account verification.
+     */
+    setVerifiedAccountName('');
+
+    if (
+      accountNumber &&
+      accountNumber.length === 10
+    ) {
+      setAccountNumber('');
+    }
+  }
+
+  /*
+   * -------------------------------------------------------
    * VERIFY BANK ACCOUNT
    * -------------------------------------------------------
    */
@@ -113,15 +207,17 @@ export default function AdminPlatformRevenue() {
         .replace(/\s+/g, '')
         .trim();
 
-    if (!/^\d{10}$/.test(cleanAccount)) {
+    if (!selectedBank || !bankCode) {
       notify(
-        'Enter a valid 10-digit Nigerian bank account number'
+        'Select your Nigerian bank first'
       );
       return;
     }
 
-    if (!bankCode.trim()) {
-      notify('Enter the bank code');
+    if (!/^\d{10}$/.test(cleanAccount)) {
+      notify(
+        'Enter a valid 10-digit Nigerian bank account number'
+      );
       return;
     }
 
@@ -134,15 +230,17 @@ export default function AdminPlatformRevenue() {
           method: 'POST',
           body: JSON.stringify({
             accountNumber: cleanAccount,
-            bankCode: bankCode.trim()
+            bankCode
           })
         }
       );
 
-      const data = response.data || {};
+      const data =
+        response.data || {};
 
       setAccountNumber(
-        data.accountNumber || cleanAccount
+        data.accountNumber ||
+        cleanAccount
       );
 
       setVerifiedAccountName(
@@ -176,13 +274,10 @@ export default function AdminPlatformRevenue() {
         .replace(/\s+/g, '')
         .trim();
 
-    if (!bankName.trim()) {
-      notify('Enter the bank name');
-      return;
-    }
-
-    if (!bankCode.trim()) {
-      notify('Enter the bank code');
+    if (!selectedBank || !bankCode) {
+      notify(
+        'Select your Nigerian bank first'
+      );
       return;
     }
 
@@ -208,15 +303,21 @@ export default function AdminPlatformRevenue() {
         {
           method: 'POST',
           body: JSON.stringify({
-            bankName: bankName.trim(),
-            bankCode: bankCode.trim(),
-            accountNumber: cleanAccount
+            bankName:
+              selectedBank.name ||
+              bankName,
+
+            bankCode,
+
+            accountNumber:
+              cleanAccount
           })
         }
       );
 
       setBankAccount(
-        response.data?.bankAccount || null
+        response.data?.bankAccount ||
+        null
       );
 
       notify({
@@ -262,7 +363,9 @@ export default function AdminPlatformRevenue() {
 
     if (
       value >
-      Number(summary.availableBalance || 0)
+      Number(
+        summary.availableBalance || 0
+      )
     ) {
       notify(
         `Insufficient commission balance. Available balance is ${formatMoney(
@@ -282,11 +385,12 @@ export default function AdminPlatformRevenue() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Withdraw ${formatMoney(
-        value
-      )} to ${bankAccount.bankName} ${bankAccount.accountNumber}?`
-    );
+    const confirmed =
+      window.confirm(
+        `Withdraw ${formatMoney(
+          value
+        )} to ${bankAccount.bankName} ${bankAccount.accountNumber}?`
+      );
 
     if (!confirmed) {
       return;
@@ -308,7 +412,8 @@ export default function AdminPlatformRevenue() {
       setAmount('');
 
       notify({
-        title: 'Commission withdrawal submitted',
+        title:
+          'Commission withdrawal submitted',
         message:
           response.data?.withdrawal?.status ===
           'successful'
@@ -340,7 +445,8 @@ export default function AdminPlatformRevenue() {
       );
 
       notify({
-        title: 'Withdrawal status updated',
+        title:
+          'Withdrawal status updated',
         message:
           'Paystack transfer status has been refreshed.',
         tone: 'success'
@@ -354,8 +460,16 @@ export default function AdminPlatformRevenue() {
     }
   }
 
+  /*
+   * -------------------------------------------------------
+   * STATUS TONE
+   * -------------------------------------------------------
+   */
+
   function withdrawalTone(status) {
-    if (status === 'successful') {
+    if (
+      status === 'successful'
+    ) {
       return 'success';
     }
 
@@ -369,8 +483,31 @@ export default function AdminPlatformRevenue() {
     return 'warning';
   }
 
+  /*
+   * -------------------------------------------------------
+   * FILTERED BANK LIST
+   * -------------------------------------------------------
+   */
+
+  const sortedBanks =
+    useMemo(() => {
+      return [...banks].sort(
+        (a, b) =>
+          String(a.name || '').localeCompare(
+            String(b.name || '')
+          )
+      );
+    }, [banks]);
+
+  /*
+   * -------------------------------------------------------
+   * RENDER
+   * -------------------------------------------------------
+   */
+
   return (
     <AdminLayout>
+
       <PageHeader
         title="Platform Commission"
         subtitle="Manage Kaduna Only commission revenue and withdraw it to the platform bank account."
@@ -391,6 +528,7 @@ export default function AdminPlatformRevenue() {
       ================================================= */}
 
       <div className="stats">
+
         <Stat
           title="Available Commission"
           value={formatMoney(
@@ -426,6 +564,7 @@ export default function AdminPlatformRevenue() {
           icon={Clock3}
           meta="Pending, processing or successful"
         />
+
       </div>
 
       {/* =================================================
@@ -433,6 +572,7 @@ export default function AdminPlatformRevenue() {
       ================================================= */}
 
       <div className="panel">
+
         <div
           style={{
             display: 'flex',
@@ -443,7 +583,9 @@ export default function AdminPlatformRevenue() {
             marginBottom: 16
           }}
         >
+
           <div>
+
             <h3
               style={{
                 margin: 0,
@@ -458,26 +600,36 @@ export default function AdminPlatformRevenue() {
 
             <p
               className="muted"
-              style={{ marginBottom: 0 }}
+              style={{
+                marginBottom: 0
+              }}
             >
-              This is the local Nigerian bank account that receives Kaduna Only commission withdrawals.
+              Select the Nigerian bank and enter the account number that should receive Kaduna Only commission withdrawals.
             </p>
+
           </div>
 
           {bankAccount?.isVerified && (
             <Badge tone="success">
+
               <ShieldCheck
                 size={13}
                 style={{
                   marginRight: 5
                 }}
               />
+
               Verified
+
             </Badge>
           )}
+
         </div>
 
+        {/* SAVED ACCOUNT */}
+
         {bankAccount ? (
+
           <div
             style={{
               padding: 16,
@@ -486,6 +638,7 @@ export default function AdminPlatformRevenue() {
               marginBottom: 18
             }}
           >
+
             <div
               style={{
                 display: 'grid',
@@ -494,6 +647,7 @@ export default function AdminPlatformRevenue() {
                 gap: 16
               }}
             >
+
               <div>
                 <small className="muted">
                   Bank
@@ -539,84 +693,124 @@ export default function AdminPlatformRevenue() {
                 </strong>
               </div>
 
-              <div>
-                <small className="muted">
-                  Bank code
-                </small>
-
-                <strong
-                  style={{
-                    display: 'block',
-                    marginTop: 4
-                  }}
-                >
-                  {bankAccount.bankCode}
-                </strong>
-              </div>
             </div>
+
           </div>
+
         ) : (
+
           <div className="notice warning">
             No platform bank account has been configured.
           </div>
+
         )}
+
+        {/* BANK SELECTION */}
 
         <div
           style={{
             display: 'grid',
             gridTemplateColumns:
-              'repeat(auto-fit,minmax(180px,1fr))',
+              'repeat(auto-fit,minmax(260px,1fr))',
             gap: 12
           }}
         >
+
           <label>
+
             <span className="muted">
-              Bank name
+              Nigerian bank
             </span>
 
-            <input
-              value={bankName}
-              onChange={e =>
-                setBankName(e.target.value)
-              }
-              placeholder="e.g. Access Bank"
+            <div
               style={{
-                width: '100%',
+                position: 'relative',
                 marginTop: 6
               }}
-            />
+            >
+
+              <select
+                value={
+                  selectedBank?.code || ''
+                }
+                onChange={
+                  handleBankChange
+                }
+                disabled={
+                  busy === 'verify-bank' ||
+                  busy === 'save-bank'
+                }
+                style={{
+                  width: '100%',
+                  paddingRight: 40,
+                  appearance: 'none'
+                }}
+              >
+
+                <option value="">
+                  Select your bank
+                </option>
+
+                {sortedBanks.map(
+                  bank => (
+                    <option
+                      key={
+                        bank.code
+                      }
+                      value={
+                        bank.code
+                      }
+                    >
+                      {bank.name}
+                    </option>
+                  )
+                )}
+
+              </select>
+
+              <ChevronDown
+                size={17}
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: '50%',
+                  transform:
+                    'translateY(-50%)',
+                  pointerEvents:
+                    'none'
+                }}
+              />
+
+            </div>
+
           </label>
 
           <label>
-            <span className="muted">
-              Bank code
-            </span>
 
-            <input
-              value={bankCode}
-              onChange={e =>
-                setBankCode(e.target.value)
-              }
-              placeholder="e.g. 044"
-              style={{
-                width: '100%',
-                marginTop: 6
-              }}
-            />
-          </label>
-
-          <label>
             <span className="muted">
               Account number
             </span>
 
             <input
-              value={accountNumber}
-              onChange={e =>
-                setAccountNumber(
-                  e.target.value
-                )
+              value={
+                accountNumber
               }
+              onChange={e => {
+                const value =
+                  e.target.value
+                    .replace(/\D/g, '')
+                    .slice(0, 10);
+
+                setAccountNumber(
+                  value
+                );
+
+                /*
+                 * Changing the account number
+                 * invalidates old verification.
+                 */
+                setVerifiedAccountName('');
+              }}
               placeholder="10-digit account number"
               inputMode="numeric"
               maxLength={10}
@@ -625,8 +819,36 @@ export default function AdminPlatformRevenue() {
                 marginTop: 6
               }}
             />
+
           </label>
+
         </div>
+
+        {/* SELECTED BANK INFORMATION */}
+
+        {selectedBank && (
+          <div
+            className="notice"
+            style={{
+              marginTop: 14
+            }}
+          >
+            <b>
+              Selected bank
+            </b>
+
+            <div
+              style={{
+                marginTop: 4
+              }}
+            >
+              {selectedBank.name}
+            </div>
+
+          </div>
+        )}
+
+        {/* VERIFIED ACCOUNT */}
 
         {verifiedAccountName && (
           <div
@@ -635,15 +857,23 @@ export default function AdminPlatformRevenue() {
               marginTop: 14
             }}
           >
+
             <b>
               Verified account name
             </b>
 
-            <p>
+            <p
+              style={{
+                marginBottom: 0
+              }}
+            >
               {verifiedAccountName}
             </p>
+
           </div>
         )}
+
+        {/* ACTIONS */}
 
         <div
           style={{
@@ -653,27 +883,49 @@ export default function AdminPlatformRevenue() {
             marginTop: 16
           }}
         >
+
           <Button
-            onClick={verifyBank}
+            onClick={
+              verifyBank
+            }
             disabled={
-              busy === 'verify-bank'
+              busy === 'verify-bank' ||
+              !selectedBank ||
+              accountNumber.length !== 10
             }
           >
+
             <ShieldCheck size={16} />
-            Verify Account
+
+            {busy === 'verify-bank'
+              ? 'Verifying...'
+              : 'Verify Account'}
+
           </Button>
 
           <Button
-            onClick={saveBank}
+            onClick={
+              saveBank
+            }
             disabled={
-              busy === 'save-bank'
+              busy === 'save-bank' ||
+              !selectedBank ||
+              !verifiedAccountName ||
+              accountNumber.length !== 10
             }
             variant="secondary"
           >
+
             <Building2 size={16} />
-            Save Bank Account
+
+            {busy === 'save-bank'
+              ? 'Saving...'
+              : 'Save Bank Account'}
+
           </Button>
+
         </div>
+
       </div>
 
       {/* =================================================
@@ -681,6 +933,7 @@ export default function AdminPlatformRevenue() {
       ================================================= */}
 
       <div className="panel">
+
         <h3
           style={{
             display: 'flex',
@@ -704,6 +957,7 @@ export default function AdminPlatformRevenue() {
             marginTop: 14
           }}
         >
+
           <div
             style={{
               display: 'grid',
@@ -713,7 +967,9 @@ export default function AdminPlatformRevenue() {
               alignItems: 'end'
             }}
           >
+
             <label>
+
               <span className="muted">
                 Withdrawal amount (NGN)
               </span>
@@ -734,9 +990,11 @@ export default function AdminPlatformRevenue() {
                   marginTop: 6
                 }}
               />
+
             </label>
 
             <div>
+
               <small className="muted">
                 Available balance
               </small>
@@ -752,11 +1010,15 @@ export default function AdminPlatformRevenue() {
                   summary.availableBalance
                 )}
               </strong>
+
             </div>
 
             <div>
+
               <Button
-                onClick={withdraw}
+                onClick={
+                  withdraw
+                }
                 disabled={
                   busy === 'withdraw' ||
                   !bankAccount?.recipientCode ||
@@ -765,10 +1027,17 @@ export default function AdminPlatformRevenue() {
                   ) < 100
                 }
               >
+
                 <Send size={16} />
-                Withdraw to Bank
+
+                {busy === 'withdraw'
+                  ? 'Processing...'
+                  : 'Withdraw to Bank'}
+
               </Button>
+
             </div>
+
           </div>
 
           <p
@@ -781,7 +1050,9 @@ export default function AdminPlatformRevenue() {
           >
             Minimum withdrawal: ₦100. Only collected commission can be withdrawn.
           </p>
+
         </div>
+
       </div>
 
       {/* =================================================
@@ -789,6 +1060,7 @@ export default function AdminPlatformRevenue() {
       ================================================= */}
 
       <div className="panel">
+
         <h3
           style={{
             display: 'flex',
@@ -801,47 +1073,34 @@ export default function AdminPlatformRevenue() {
         </h3>
 
         <div className="table-wrap">
+
           <table>
+
             <thead>
+
               <tr>
-                <th>
-                  Amount
-                </th>
-
-                <th>
-                  Bank
-                </th>
-
-                <th>
-                  Account
-                </th>
-
-                <th>
-                  Status
-                </th>
-
-                <th>
-                  Reference
-                </th>
-
-                <th>
-                  Date
-                </th>
-
-                <th>
-                  Action
-                </th>
+                <th>Amount</th>
+                <th>Bank</th>
+                <th>Account</th>
+                <th>Status</th>
+                <th>Reference</th>
+                <th>Date</th>
+                <th>Action</th>
               </tr>
+
             </thead>
 
             <tbody>
+
               {withdrawals.map(
                 item => (
+
                   <tr
                     key={
                       item._id
                     }
                   >
+
                     <td>
                       <b>
                         {formatMoney(
@@ -855,6 +1114,7 @@ export default function AdminPlatformRevenue() {
                     </td>
 
                     <td>
+
                       <b>
                         {item.accountName}
                       </b>
@@ -862,29 +1122,26 @@ export default function AdminPlatformRevenue() {
                       <br />
 
                       <small>
-                        {
-                          item.accountNumber
-                        }
+                        {item.accountNumber}
                       </small>
+
                     </td>
 
                     <td>
+
                       <Badge
                         tone={withdrawalTone(
                           item.status
                         )}
                       >
-                        {
-                          item.status
-                        }
+                        {item.status}
                       </Badge>
+
                     </td>
 
                     <td>
                       <small>
-                        {
-                          item.reference
-                        }
+                        {item.reference}
                       </small>
                     </td>
 
@@ -899,12 +1156,14 @@ export default function AdminPlatformRevenue() {
                     </td>
 
                     <td>
+
                       {[
                         'pending',
                         'processing'
                       ].includes(
                         item.status
                       ) && (
+
                         <Button
                           variant="secondary"
                           disabled={
@@ -917,27 +1176,43 @@ export default function AdminPlatformRevenue() {
                             )
                           }
                         >
+
                           <RefreshCw
                             size={14}
                           />
-                          Verify
+
+                          {busy ===
+                          `verify-${item._id}`
+                            ? 'Checking...'
+                            : 'Verify'}
+
                         </Button>
+
                       )}
 
-                      {item.status ===
-                        'failed' ||
-                      item.status ===
-                        'reversed' ? (
+                      {[
+                        'failed',
+                        'reversed'
+                      ].includes(
+                        item.status
+                      ) && (
+
                         <small className="muted">
                           {item.failureReason ||
                             'Transfer failed'}
                         </small>
-                      ) : null}
+
+                      )}
+
                     </td>
+
                   </tr>
+
                 )
               )}
+
             </tbody>
+
           </table>
 
           {!withdrawals.length && (
@@ -945,7 +1220,9 @@ export default function AdminPlatformRevenue() {
               No platform commission withdrawals yet.
             </p>
           )}
+
         </div>
+
       </div>
 
       {/* =================================================
@@ -953,67 +1230,52 @@ export default function AdminPlatformRevenue() {
       ================================================= */}
 
       <div className="panel">
+
         <h3>
           Commission Revenue History
         </h3>
 
         <div className="table-wrap">
+
           <table>
+
             <thead>
+
               <tr>
-                <th>
-                  Trip
-                </th>
-
-                <th>
-                  Driver
-                </th>
-
-                <th>
-                  Rider
-                </th>
-
-                <th>
-                  Payment
-                </th>
-
-                <th>
-                  Commission
-                </th>
-
-                <th>
-                  Status
-                </th>
-
-                <th>
-                  Date
-                </th>
+                <th>Trip</th>
+                <th>Driver</th>
+                <th>Rider</th>
+                <th>Payment</th>
+                <th>Commission</th>
+                <th>Status</th>
+                <th>Date</th>
               </tr>
+
             </thead>
 
             <tbody>
+
               {revenue.map(
                 item => (
+
                   <tr
                     key={
                       item._id
                     }
                   >
+
                     <td>
-                      {item.trip
-                        ?.tripId ||
+                      {item.trip?.tripId ||
                         '—'}
                     </td>
 
                     <td>
-                      {item.driver
-                        ?.fullName ||
+                      {item.driver?.fullName ||
                         '—'}
                     </td>
 
                     <td>
-                      {item.rider
-                        ?.fullName ||
+                      {item.rider?.fullName ||
                         '—'}
                     </td>
 
@@ -1022,14 +1284,17 @@ export default function AdminPlatformRevenue() {
                     </td>
 
                     <td>
+
                       <b>
                         {formatMoney(
                           item.amount
                         )}
                       </b>
+
                     </td>
 
                     <td>
+
                       <Badge
                         tone={
                           item.status ===
@@ -1038,13 +1303,13 @@ export default function AdminPlatformRevenue() {
                             : 'warning'
                         }
                       >
-                        {
-                          item.status
-                        }
+                        {item.status}
                       </Badge>
+
                     </td>
 
                     <td>
+
                       <small>
                         {new Date(
                           item.createdAt
@@ -1052,11 +1317,16 @@ export default function AdminPlatformRevenue() {
                           'en-NG'
                         )}
                       </small>
+
                     </td>
+
                   </tr>
+
                 )
               )}
+
             </tbody>
+
           </table>
 
           {!revenue.length && (
@@ -1064,8 +1334,11 @@ export default function AdminPlatformRevenue() {
               No commission revenue records yet.
             </p>
           )}
+
         </div>
+
       </div>
+
     </AdminLayout>
   );
 }

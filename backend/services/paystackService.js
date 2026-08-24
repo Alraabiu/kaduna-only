@@ -2,7 +2,6 @@ const crypto = require('crypto');
 const Payment = require('../models/Payment');
 const Wallet = require('../models/Wallet');
 
-
 /*
  * =========================================================
  * PAYSTACK CONFIGURATION
@@ -61,14 +60,11 @@ function mode() {
 
 /*
  * =========================================================
- * PAYSTACK API REQUEST
+ * GENERIC PAYSTACK REQUEST
  * =========================================================
  */
 
-async function request(
-  path,
-  options = {}
-) {
+async function request(path, options = {}) {
   const controller =
     new AbortController();
 
@@ -104,7 +100,7 @@ async function request(
     const raw =
       await response.text();
 
-    let body;
+    let body = {};
 
     try {
       body =
@@ -114,7 +110,6 @@ async function request(
     } catch {
       body = {
         status: false,
-
         message:
           'Invalid response from Paystack'
       };
@@ -194,7 +189,7 @@ function newReference() {
 
 /*
  * =========================================================
- * WALLET TOP-UP
+ * INITIALIZE WALLET TOP-UP
  * =========================================================
  */
 
@@ -252,7 +247,8 @@ async function initializeWalletTopup({
     await request(
       '/transaction/initialize',
       {
-        method: 'POST',
+        method:
+          'POST',
 
         body:
           JSON.stringify({
@@ -279,7 +275,9 @@ async function initializeWalletTopup({
                   'wallet_topup',
 
                 userId:
-                  String(user._id),
+                  String(
+                    user._id
+                  ),
 
                 phone:
                   user.phone || ''
@@ -354,7 +352,8 @@ async function verifyReference(
       cleanReference
     )}`,
     {
-      method: 'GET'
+      method:
+        'GET'
     }
   );
 }
@@ -472,12 +471,6 @@ async function fulfillWalletTopup(
     );
   }
 
-  /*
-   * Idempotent wallet credit.
-   *
-   * The transaction reference must not already
-   * exist in the wallet transaction array.
-   */
   const wallet =
     await Wallet.findOneAndUpdate(
       {
@@ -612,10 +605,6 @@ function validWebhookSignature(
 
   let raw;
 
-  /*
-   * Express raw body normally arrives as Buffer.
-   * Preserve Buffer bytes exactly.
-   */
   if (
     Buffer.isBuffer(
       rawBody
@@ -679,7 +668,7 @@ function validWebhookSignature(
 
 /*
  * =========================================================
- * PAYSTACK BANK CACHE
+ * BANK DIRECTORY CACHE
  * =========================================================
  */
 
@@ -693,7 +682,7 @@ const BANK_CACHE_TTL =
 
 /*
  * =========================================================
- * FETCH ONE BANK PAGE
+ * FETCH BANK PAGE
  * =========================================================
  */
 
@@ -715,19 +704,19 @@ async function fetchBankPage(
  * LIST NIGERIAN BANKS
  * =========================================================
  *
- * The administrator does not need to know bank codes.
+ * This function is the bridge between Paystack's
+ * bank directory and the admin UI.
  *
- * Paystack provides the bank directory.
+ * The administrator does NOT enter a bank code.
  *
- * Frontend:
+ * The UI receives:
  *
- *     Search bank
- *          ↓
- *     Select bank
- *          ↓
- *     Automatically obtain bank code
- *          ↓
- *     Verify account
+ * {
+ *   name: "OPay",
+ *   code: "..."
+ * }
+ *
+ * The code is retained internally only.
  *
  * =========================================================
  */
@@ -757,14 +746,6 @@ async function listNigerianBanks({
 
   const allBanks = [];
 
-  /*
-   * Paystack supports pagination.
-   *
-   * We fetch pages until a page contains fewer
-   * than 100 records.
-   *
-   * Safety limit prevents an accidental endless loop.
-   */
   const MAX_PAGES =
     10;
 
@@ -797,72 +778,47 @@ async function listNigerianBanks({
     }
   }
 
-  const banks =
-    allBanks
-      .filter(bank =>
-        bank &&
-        bank.active !== false &&
-        bank.is_deleted !== true
-      )
-      .map(bank => ({
-        name:
-          String(
-            bank.name ||
-            ''
-          ).trim(),
-
-        code:
-          String(
-            bank.code ||
-            ''
-          ).trim(),
-
-        slug:
-          String(
-            bank.slug ||
-            ''
-          ).trim(),
-
-        type:
-          String(
-            bank.type ||
-            'nuban'
-          ).trim(),
-
-        country:
-          String(
-            bank.country ||
-            'Nigeria'
-          ).trim(),
-
-        currency:
-          String(
-            bank.currency ||
-            'NGN'
-          )
-            .trim()
-            .toUpperCase(),
-
-        active:
-          bank.active !== false
-      }))
-      .filter(bank =>
-        bank.name &&
-        bank.code
-      );
-
-
-  /*
-   * Remove duplicate bank-code/name combinations.
-   */
   const unique =
     new Map();
 
   for (
-    const bank of banks
+    const bank of allBanks
   ) {
+    if (!bank) {
+      continue;
+    }
+
+    if (
+      bank.active === false
+    ) {
+      continue;
+    }
+
+    if (
+      bank.is_deleted === true
+    ) {
+      continue;
+    }
+
+    const name =
+      String(
+        bank.name || ''
+      ).trim();
+
+    const code =
+      String(
+        bank.code || ''
+      ).trim();
+
+    if (
+      !name ||
+      !code
+    ) {
+      continue;
+    }
+
     const key =
-      `${bank.code}|${bank.name}`
+      `${code}|${name}`
         .toLowerCase();
 
     if (
@@ -870,12 +826,44 @@ async function listNigerianBanks({
     ) {
       unique.set(
         key,
-        bank
+        {
+          name,
+
+          code,
+
+          slug:
+            String(
+              bank.slug || ''
+            ).trim(),
+
+          type:
+            String(
+              bank.type ||
+              'nuban'
+            ).trim(),
+
+          country:
+            String(
+              bank.country ||
+              'Nigeria'
+            ).trim(),
+
+          currency:
+            String(
+              bank.currency ||
+              'NGN'
+            )
+              .trim()
+              .toUpperCase(),
+
+          active:
+            true
+        }
       );
     }
   }
 
-  const sortedBanks =
+  const banks =
     Array.from(
       unique.values()
     ).sort(
@@ -886,7 +874,7 @@ async function listNigerianBanks({
     );
 
   bankCache =
-    sortedBanks;
+    banks;
 
   bankCacheExpiresAt =
     Date.now() +
@@ -897,7 +885,7 @@ async function listNigerianBanks({
       true,
 
     data:
-      sortedBanks
+      banks
   };
 }
 
@@ -919,7 +907,13 @@ function clearBankCache() {
 
 /*
  * =========================================================
- * RESOLVE NIGERIAN BANK ACCOUNT
+ * RESOLVE BANK ACCOUNT
+ * =========================================================
+ *
+ * This receives the bank code internally.
+ *
+ * The admin does NOT provide it manually.
+ *
  * =========================================================
  */
 
@@ -929,8 +923,7 @@ async function resolveBankAccount({
 }) {
   const account =
     String(
-      accountNumber ||
-      ''
+      accountNumber || ''
     )
       .replace(
         /\s+/g,
@@ -940,8 +933,7 @@ async function resolveBankAccount({
 
   const code =
     String(
-      bankCode ||
-      ''
+      bankCode || ''
     ).trim();
 
   if (
@@ -960,7 +952,7 @@ async function resolveBankAccount({
   if (!code) {
     throw Object.assign(
       new Error(
-        'Bank code is required'
+        'Bank selection is required'
       ),
       { statusCode: 400 }
     );
@@ -994,8 +986,7 @@ async function createTransferRecipient({
 }) {
   const cleanAccount =
     String(
-      accountNumber ||
-      ''
+      accountNumber || ''
     )
       .replace(
         /\s+/g,
@@ -1005,14 +996,12 @@ async function createTransferRecipient({
 
   const cleanName =
     String(
-      accountName ||
-      ''
+      accountName || ''
     ).trim();
 
   const cleanBankCode =
     String(
-      bankCode ||
-      ''
+      bankCode || ''
     ).trim();
 
   if (!cleanName) {
@@ -1040,7 +1029,7 @@ async function createTransferRecipient({
   if (!cleanBankCode) {
     throw Object.assign(
       new Error(
-        'Bank code is required'
+        'Bank selection is required'
       ),
       { statusCode: 400 }
     );
@@ -1143,13 +1132,6 @@ async function initiateTransfer({
     );
   }
 
-  /*
-   * Paystack expects amount in kobo.
-   *
-   * Example:
-   *
-   * ₦150 = 15,000 kobo
-   */
   const koboAmount =
     Math.round(
       numericAmount * 100
@@ -1208,8 +1190,7 @@ async function verifyTransfer(
 ) {
   const cleanReference =
     String(
-      reference ||
-      ''
+      reference || ''
     ).trim();
 
   if (!cleanReference) {
@@ -1254,14 +1235,14 @@ module.exports = {
   validWebhookSignature,
 
   /*
-   * Banks
+   * Bank directory
    */
   listNigerianBanks,
   clearBankCache,
   resolveBankAccount,
 
   /*
-   * Transfers
+   * Transfer
    */
   createTransferRecipient,
   initiateTransfer,
