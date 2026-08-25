@@ -4,6 +4,7 @@ const PlatformBankAccount = require('../models/PlatformBankAccount');
 
 const {
   resolveBankAccount,
+  listNigerianBanks,
   createTransferRecipient,
   initiateTransfer,
   verifyTransfer,
@@ -11,19 +12,25 @@ const {
 } = require('../services/paystackService');
 
 
+// =========================================================
+// HELPERS
+// =========================================================
+
 function getAdminId(req) {
   return req.user?._id;
 }
 
 
-/*
- * ---------------------------------------------------------
- * REVENUE SUMMARY
- * ---------------------------------------------------------
- */
+// =========================================================
+// REVENUE SUMMARY
+// =========================================================
+// GET /api/admin/platform-revenue
+// =========================================================
 
 async function summary(req, res, next) {
   try {
+    const adminId = getAdminId(req);
+
     const revenue = await PlatformRevenue.aggregate([
       {
         $match: {
@@ -46,7 +53,7 @@ async function summary(req, res, next) {
     const withdrawals = await PlatformWithdrawal.aggregate([
       {
         $match: {
-          admin: getAdminId(req),
+          admin: adminId,
           status: {
             $in: [
               'pending',
@@ -70,7 +77,7 @@ async function summary(req, res, next) {
       await PlatformWithdrawal.aggregate([
         {
           $match: {
-            admin: getAdminId(req),
+            admin: adminId,
             status: 'successful'
           }
         },
@@ -85,28 +92,20 @@ async function summary(req, res, next) {
       ]);
 
     const totalCommission =
-      Number(
-        revenue[0]?.total || 0
-      );
+      Number(revenue[0]?.total || 0);
 
-    const reserved =
-      Number(
-        withdrawals[0]?.total || 0
-      );
+    const reservedAmount =
+      Number(withdrawals[0]?.total || 0);
 
     const totalWithdrawn =
       Number(
         successfulWithdrawals[0]?.total || 0
       );
 
-    /*
-     * pending + processing + successful
-     * are already reserved from available balance.
-     */
-    const available =
+    const availableBalance =
       Math.max(
         0,
-        totalCommission - reserved
+        totalCommission - reservedAmount
       );
 
     res.json({
@@ -115,8 +114,9 @@ async function summary(req, res, next) {
       data: {
         totalCommission,
         totalWithdrawn,
-        reservedAmount: reserved,
-        availableBalance: available,
+        reservedAmount,
+        availableBalance,
+
         revenueCount:
           Number(
             revenue[0]?.count || 0
@@ -129,13 +129,78 @@ async function summary(req, res, next) {
 }
 
 
-/*
- * ---------------------------------------------------------
- * REVENUE HISTORY
- * ---------------------------------------------------------
- */
+// =========================================================
+// NIGERIAN BANK DIRECTORY
+// =========================================================
+// GET /api/admin/platform-revenue/banks
+//
+// The frontend uses this endpoint to populate the bank
+// dropdown.
+//
+// The administrator should select a bank instead of
+// manually typing the bank code.
+// =========================================================
 
-async function revenueHistory(req, res, next) {
+async function banks(req, res, next) {
+  try {
+    const result =
+      await listNigerianBanks();
+
+    const bankList =
+      Array.isArray(result?.data)
+        ? result.data
+            .filter(
+              bank =>
+                bank &&
+                bank.name &&
+                bank.code
+            )
+            .map(bank => ({
+              name: String(
+                bank.name
+              ).trim(),
+
+              code: String(
+                bank.code
+              ).trim(),
+
+              slug:
+                bank.slug || '',
+
+              active:
+                bank.active !== false
+            }))
+            .sort((a, b) =>
+              a.name.localeCompare(
+                b.name
+              )
+            )
+        : [];
+
+    res.json({
+      success: true,
+
+      data: {
+        banks: bankList
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+// =========================================================
+// REVENUE HISTORY
+// =========================================================
+// GET /api/admin/platform-revenue/history
+// =========================================================
+
+async function revenueHistory(
+  req,
+  res,
+  next
+) {
   try {
     const revenue =
       await PlatformRevenue.find({})
@@ -158,6 +223,7 @@ async function revenueHistory(req, res, next) {
 
     res.json({
       success: true,
+
       data: {
         revenue
       }
@@ -168,11 +234,11 @@ async function revenueHistory(req, res, next) {
 }
 
 
-/*
- * ---------------------------------------------------------
- * BANK ACCOUNT
- * ---------------------------------------------------------
- */
+// =========================================================
+// GET SAVED PLATFORM BANK ACCOUNT
+// =========================================================
+// GET /api/admin/platform-revenue/bank-account
+// =========================================================
 
 async function getBankAccount(
   req,
@@ -187,6 +253,7 @@ async function getBankAccount(
 
     res.json({
       success: true,
+
       data: {
         bankAccount: bank
       }
@@ -197,11 +264,19 @@ async function getBankAccount(
 }
 
 
-/*
- * ---------------------------------------------------------
- * VERIFY BANK ACCOUNT
- * ---------------------------------------------------------
- */
+// =========================================================
+// VERIFY BANK ACCOUNT
+// =========================================================
+// POST /api/admin/platform-revenue/bank-account/verify
+//
+// Body:
+//
+// {
+//   accountNumber: "0123456789",
+//   bankCode: "058"
+// }
+//
+// =========================================================
 
 async function verifyBankAccount(
   req,
@@ -228,6 +303,7 @@ async function verifyBankAccount(
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           'Account number must be exactly 10 digits'
       });
@@ -236,6 +312,7 @@ async function verifyBankAccount(
     if (!bankCode) {
       return res.status(400).json({
         success: false,
+
         message:
           'Bank code is required'
       });
@@ -247,16 +324,37 @@ async function verifyBankAccount(
         bankCode
       });
 
+    const accountName =
+      String(
+        result?.data?.account_name || ''
+      ).trim();
+
+    const resolvedAccountNumber =
+      String(
+        result?.data?.account_number ||
+        accountNumber
+      ).trim();
+
+    if (!accountName) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          'Unable to resolve bank account name'
+      });
+    }
+
     res.json({
       success: true,
+
       message:
         'Bank account verified',
+
       data: {
         accountNumber:
-          result.data.account_number,
+          resolvedAccountNumber,
 
-        accountName:
-          result.data.account_name,
+        accountName,
 
         bankCode
       }
@@ -267,11 +365,14 @@ async function verifyBankAccount(
 }
 
 
-/*
- * ---------------------------------------------------------
- * SAVE BANK ACCOUNT
- * ---------------------------------------------------------
- */
+// =========================================================
+// SAVE VERIFIED PLATFORM BANK ACCOUNT
+// =========================================================
+// POST /api/admin/platform-revenue/bank-account
+//
+// The account name is resolved again through Paystack.
+// The frontend cannot simply submit a fake account name.
+// =========================================================
 
 async function saveBankAccount(
   req,
@@ -299,6 +400,7 @@ async function saveBankAccount(
     if (!bankName) {
       return res.status(400).json({
         success: false,
+
         message:
           'Bank name is required'
       });
@@ -307,6 +409,7 @@ async function saveBankAccount(
     if (!bankCode) {
       return res.status(400).json({
         success: false,
+
         message:
           'Bank code is required'
       });
@@ -319,17 +422,13 @@ async function saveBankAccount(
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           'Account number must be exactly 10 digits'
       });
     }
 
-    /*
-     * Never trust account name supplied
-     * by the frontend.
-     *
-     * Resolve it again through Paystack.
-     */
+    // Resolve account directly with Paystack.
     const resolved =
       await resolveBankAccount({
         accountNumber,
@@ -338,20 +437,19 @@ async function saveBankAccount(
 
     const accountName =
       String(
-        resolved.data.account_name || ''
+        resolved?.data?.account_name || ''
       ).trim();
 
     if (!accountName) {
       return res.status(400).json({
         success: false,
+
         message:
           'Unable to resolve bank account name'
       });
     }
 
-    /*
-     * Create Paystack transfer recipient.
-     */
+    // Create Paystack transfer recipient.
     const recipient =
       await createTransferRecipient({
         accountName,
@@ -360,11 +458,26 @@ async function saveBankAccount(
         currency: 'NGN'
       });
 
+    const recipientCode =
+      String(
+        recipient?.data?.recipient_code || ''
+      ).trim();
+
+    if (!recipientCode) {
+      return res.status(502).json({
+        success: false,
+
+        message:
+          'Paystack did not return a transfer recipient'
+      });
+    }
+
     const saved =
       await PlatformBankAccount.findOneAndUpdate(
         {
           admin: getAdminId(req)
         },
+
         {
           $set: {
             bankName,
@@ -372,8 +485,7 @@ async function saveBankAccount(
             accountNumber,
             accountName,
 
-            recipientCode:
-              recipient.data.recipient_code,
+            recipientCode,
 
             currency: 'NGN',
 
@@ -383,6 +495,7 @@ async function saveBankAccount(
               new Date()
           }
         },
+
         {
           returnDocument: 'after',
           upsert: true
@@ -391,6 +504,7 @@ async function saveBankAccount(
 
     res.json({
       success: true,
+
       message:
         'Platform withdrawal account saved successfully',
 
@@ -404,11 +518,11 @@ async function saveBankAccount(
 }
 
 
-/*
- * ---------------------------------------------------------
- * WITHDRAWAL HISTORY
- * ---------------------------------------------------------
- */
+// =========================================================
+// PLATFORM WITHDRAWAL HISTORY
+// =========================================================
+// GET /api/admin/platform-revenue/withdrawals
+// =========================================================
 
 async function withdrawals(
   req,
@@ -427,6 +541,7 @@ async function withdrawals(
 
     res.json({
       success: true,
+
       data: {
         withdrawals: items
       }
@@ -437,11 +552,11 @@ async function withdrawals(
 }
 
 
-/*
- * ---------------------------------------------------------
- * REQUEST WITHDRAWAL
- * ---------------------------------------------------------
- */
+// =========================================================
+// REQUEST COMMISSION WITHDRAWAL
+// =========================================================
+// POST /api/admin/platform-revenue/withdraw
+// =========================================================
 
 async function requestWithdrawal(
   req,
@@ -450,32 +565,36 @@ async function requestWithdrawal(
 ) {
   try {
     const amount =
-      Number(req.body.amount);
+      Number(
+        req.body.amount
+      );
 
+    // Minimum withdrawal.
     if (
       !Number.isFinite(amount) ||
       amount < 100
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           'Minimum commission withdrawal is ₦100'
       });
     }
 
+    // Only whole naira amounts.
     if (
       !Number.isInteger(amount)
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           'Withdrawal amount must be a whole number'
       });
     }
 
-    /*
-     * Require a verified bank.
-     */
+    // Require a verified platform bank.
     const bank =
       await PlatformBankAccount.findOne({
         admin: getAdminId(req),
@@ -488,14 +607,13 @@ async function requestWithdrawal(
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           'Set and verify the platform bank account before withdrawing'
       });
     }
 
-    /*
-     * Calculate total collected commission.
-     */
+    // Calculate total collected commission.
     const revenue =
       await PlatformRevenue.aggregate([
         {
@@ -503,9 +621,11 @@ async function requestWithdrawal(
             status: 'collected'
           }
         },
+
         {
           $group: {
             _id: null,
+
             total: {
               $sum: '$amount'
             }
@@ -513,10 +633,7 @@ async function requestWithdrawal(
         }
       ]);
 
-    /*
-     * Reserve pending, processing and
-     * successful withdrawals.
-     */
+    // Reserve pending, processing and successful withdrawals.
     const reserved =
       await PlatformWithdrawal.aggregate([
         {
@@ -532,9 +649,11 @@ async function requestWithdrawal(
             }
           }
         },
+
         {
           $group: {
             _id: null,
+
             total: {
               $sum: '$amount'
             }
@@ -559,9 +678,7 @@ async function requestWithdrawal(
           reservedAmount
       );
 
-    /*
-     * Prevent overdrawing.
-     */
+    // Prevent overdrawing commission.
     if (
       amount >
       availableBalance
@@ -578,15 +695,12 @@ async function requestWithdrawal(
       });
     }
 
-    /*
-     * Create withdrawal record BEFORE
-     * contacting Paystack.
-     *
-     * This reserves the amount.
-     */
+    // Generate unique Paystack transfer reference.
     const reference =
       newTransferReference();
 
+    // Create the withdrawal first so that
+    // the amount becomes reserved.
     const withdrawal =
       await PlatformWithdrawal.create({
         admin:
@@ -621,10 +735,8 @@ async function requestWithdrawal(
           new Date()
       });
 
-    /*
-     * Initiate Paystack transfer.
-     */
     try {
+      // Initiate Paystack transfer.
       const transfer =
         await initiateTransfer({
           amount,
@@ -639,7 +751,7 @@ async function requestWithdrawal(
         });
 
       const data =
-        transfer.data || {};
+        transfer?.data || {};
 
       const paystackStatus =
         String(
@@ -702,11 +814,11 @@ async function requestWithdrawal(
 }
 
 
-/*
- * ---------------------------------------------------------
- * VERIFY WITHDRAWAL
- * ---------------------------------------------------------
- */
+// =========================================================
+// VERIFY PLATFORM WITHDRAWAL
+// =========================================================
+// GET /api/admin/platform-revenue/withdrawals/:id/verify
+// =========================================================
 
 async function verifyWithdrawal(
   req,
@@ -726,6 +838,7 @@ async function verifyWithdrawal(
     if (!withdrawal) {
       return res.status(404).json({
         success: false,
+
         message:
           'Platform withdrawal not found'
       });
@@ -737,7 +850,7 @@ async function verifyWithdrawal(
       );
 
     const data =
-      result.data || {};
+      result?.data || {};
 
     const status =
       String(
@@ -762,7 +875,9 @@ async function verifyWithdrawal(
 
       withdrawal.completedAt =
         new Date();
-    } else if (
+    }
+
+    else if (
       status === 'failed'
     ) {
       withdrawal.status =
@@ -775,7 +890,9 @@ async function verifyWithdrawal(
 
       withdrawal.completedAt =
         new Date();
-    } else if (
+    }
+
+    else if (
       status === 'reversed'
     ) {
       withdrawal.status =
@@ -787,7 +904,9 @@ async function verifyWithdrawal(
 
       withdrawal.completedAt =
         new Date();
-    } else {
+    }
+
+    else {
       withdrawal.status =
         'processing';
     }
@@ -810,8 +929,13 @@ async function verifyWithdrawal(
 }
 
 
+// =========================================================
+// EXPORTS
+// =========================================================
+
 module.exports = {
   summary,
+  banks,
   revenueHistory,
   getBankAccount,
   verifyBankAccount,
