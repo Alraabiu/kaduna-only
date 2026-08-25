@@ -97,7 +97,16 @@ app.use(morgan('dev'));
 /* =========================================================
    HEALTH CHECK
 ========================================================= */
-
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    application: 'Kaduna Only',
+    status: 'online',
+    api: true,
+    realtime: true,
+    timestamp: new Date().toISOString()
+  });
+});
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
