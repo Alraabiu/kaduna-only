@@ -1,5 +1,20 @@
 require('dotenv').config();
 
+const paystackKeyCheck = String(
+  process.env.PAYSTACK_SECRET_KEY || ''
+).trim();
+
+console.log('[PAYSTACK CONFIG]', {
+  configured: !!paystackKeyCheck,
+  environment:
+    paystackKeyCheck.startsWith('sk_live_')
+      ? 'live'
+      : paystackKeyCheck.startsWith('sk_test_')
+        ? 'test'
+        : 'unknown',
+  length: paystackKeyCheck.length
+});
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
