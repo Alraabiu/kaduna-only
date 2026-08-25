@@ -1,18 +1,31 @@
 require('dotenv').config();
 
+const crypto = require('crypto');
+
 const paystackKeyCheck = String(
   process.env.PAYSTACK_SECRET_KEY || ''
 ).trim();
 
 console.log('[PAYSTACK CONFIG]', {
   configured: !!paystackKeyCheck,
+
   environment:
     paystackKeyCheck.startsWith('sk_live_')
       ? 'live'
       : paystackKeyCheck.startsWith('sk_test_')
         ? 'test'
         : 'unknown',
-  length: paystackKeyCheck.length
+
+  length:
+    paystackKeyCheck.length,
+
+  fingerprint:
+    paystackKeyCheck
+      ? crypto
+          .createHash('sha256')
+          .update(paystackKeyCheck)
+          .digest('hex')
+      : ''
 });
 
 const express = require('express');
