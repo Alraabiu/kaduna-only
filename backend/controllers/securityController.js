@@ -2,17 +2,37 @@ const DeviceSession = require('../models/DeviceSession');
 
 
 
+/*
+=========================================================
+GET USER DEVICES
+=========================================================
+*/
+
 async function getDevices(req,res,next){
 
   try{
 
+
     const devices =
+
       await DeviceSession.find({
+
         user:req.user._id
+
       })
+
       .sort({
+
         lastActiveAt:-1
-      });
+
+      })
+
+      .select(
+
+        'deviceId deviceName platform trusted lastActiveAt createdAt ipAddress'
+
+      );
+
 
 
 
@@ -25,6 +45,7 @@ async function getDevices(req,res,next){
     });
 
 
+
   }catch(error){
 
     next(error);
@@ -37,18 +58,29 @@ async function getDevices(req,res,next){
 
 
 
+
+/*
+=========================================================
+REMOVE DEVICE
+=========================================================
+*/
+
 async function removeDevice(req,res,next){
 
   try{
 
 
     const {
+
       deviceId
+
     } = req.params;
 
 
 
+
     const device =
+
       await DeviceSession.findOneAndDelete({
 
         user:req.user._id,
@@ -59,13 +91,16 @@ async function removeDevice(req,res,next){
 
 
 
+
+
     if(!device){
 
       return res.status(404).json({
 
         success:false,
 
-        message:'Device not found'
+        message:
+        'Device not found'
 
       });
 
@@ -73,13 +108,17 @@ async function removeDevice(req,res,next){
 
 
 
+
     res.json({
 
       success:true,
 
-      message:'Device removed successfully'
+      message:
+      'Device removed successfully'
 
     });
+
+
 
 
 
@@ -95,6 +134,210 @@ async function removeDevice(req,res,next){
 
 
 
+
+/*
+=========================================================
+TRUST DEVICE
+=========================================================
+*/
+
+async function trustDevice(req,res,next){
+
+  try{
+
+
+    const {
+
+      deviceId
+
+    } = req.params;
+
+
+
+
+    const device =
+
+      await DeviceSession.findOneAndUpdate(
+
+        {
+
+          user:req.user._id,
+
+          deviceId
+
+        },
+
+        {
+
+          $set:{
+
+            trusted:true,
+
+            lastActiveAt:new Date()
+
+          }
+
+        },
+
+        {
+
+          returnDocument:'after'
+
+        }
+
+      );
+
+
+
+
+
+    if(!device){
+
+      return res.status(404).json({
+
+        success:false,
+
+        message:
+        'Device not found'
+
+      });
+
+    }
+
+
+
+
+    res.json({
+
+      success:true,
+
+      message:
+      'Device trusted successfully',
+
+      device
+
+    });
+
+
+
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
+
+
+
+
+/*
+=========================================================
+UNTRUST DEVICE
+=========================================================
+*/
+
+async function untrustDevice(req,res,next){
+
+  try{
+
+
+    const {
+
+      deviceId
+
+    } = req.params;
+
+
+
+
+    const device =
+
+      await DeviceSession.findOneAndUpdate(
+
+        {
+
+          user:req.user._id,
+
+          deviceId
+
+        },
+
+        {
+
+          $set:{
+
+            trusted:false
+
+          }
+
+        },
+
+        {
+
+          returnDocument:'after'
+
+        }
+
+      );
+
+
+
+
+
+    if(!device){
+
+      return res.status(404).json({
+
+        success:false,
+
+        message:
+        'Device not found'
+
+      });
+
+    }
+
+
+
+
+    res.json({
+
+      success:true,
+
+      message:
+      'Device untrusted',
+
+      device
+
+    });
+
+
+
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
+
+
+
+
+/*
+=========================================================
+LOGOUT ALL DEVICES
+=========================================================
+*/
 
 async function logoutAllDevices(req,res,next){
 
@@ -104,13 +347,17 @@ async function logoutAllDevices(req,res,next){
     await DeviceSession.updateMany(
 
       {
+
         user:req.user._id
+
       },
 
       {
 
         $set:{
+
           trusted:false
+
         }
 
       }
@@ -119,14 +366,17 @@ async function logoutAllDevices(req,res,next){
 
 
 
+
     res.json({
 
       success:true,
 
       message:
-        'All devices logged out successfully'
+      'All devices have been logged out'
 
     });
+
+
 
 
 
@@ -142,12 +392,19 @@ async function logoutAllDevices(req,res,next){
 
 
 
+
 module.exports = {
+
 
   getDevices,
 
   removeDevice,
 
+  trustDevice,
+
+  untrustDevice,
+
   logoutAllDevices
+
 
 };

@@ -2,9 +2,12 @@ const express = require('express');
 
 const router = express.Router();
 
+
 const {
   getDevices,
   removeDevice,
+  trustDevice,
+  untrustDevice,
   logoutAllDevices
 } = require('../controllers/securityController');
 
@@ -15,6 +18,12 @@ const {
 
 
 
+/*
+=========================================================
+GET ALL USER DEVICES
+=========================================================
+*/
+
 router.get(
   '/devices',
   requireAuth,
@@ -23,6 +32,13 @@ router.get(
 
 
 
+
+/*
+=========================================================
+REMOVE DEVICE
+=========================================================
+*/
+
 router.delete(
   '/devices/:deviceId',
   requireAuth,
@@ -30,6 +46,43 @@ router.delete(
 );
 
 
+
+
+/*
+=========================================================
+TRUST DEVICE
+=========================================================
+*/
+
+router.patch(
+  '/devices/:deviceId/trust',
+  requireAuth,
+  trustDevice
+);
+
+
+
+
+/*
+=========================================================
+UNTRUST DEVICE
+=========================================================
+*/
+
+router.patch(
+  '/devices/:deviceId/untrust',
+  requireAuth,
+  untrustDevice
+);
+
+
+
+
+/*
+=========================================================
+LOGOUT ALL DEVICES
+=========================================================
+*/
 
 router.post(
   '/logout-all',
