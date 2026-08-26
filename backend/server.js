@@ -70,6 +70,7 @@ const {
 } = require('./services/pushService');
 
 const app = express();
+app.set('trust proxy', true);
 
 /* =========================================================
    HTTP CONFIGURATION
@@ -94,15 +95,40 @@ app.use(
  * We preserve those bytes only for the Paystack webhook.
  */
 
+/*
+ * =========================================================
+ * PAYSTACK WEBHOOK RAW BODY HANDLING
+ * =========================================================
+ *
+ * Must run before express.json().
+ * Paystack signature verification requires
+ * the exact original request bytes.
+ *
+ */
+
+app.use(
+  '/api/payments/paystack/webhook',
+  express.raw({
+    type: 'application/json'
+  })
+);
+
+
 app.use(
   express.json({
     verify: (req, res, buf) => {
+
       if (
-        req.originalUrl ===
-        '/api/payments/paystack/webhook'
+        req.originalUrl.startsWith(
+          '/api/payments/paystack/webhook'
+        )
       ) {
-        req.rawBody = Buffer.from(buf);
+
+        req.rawBody =
+          Buffer.from(buf);
+
       }
+
     }
   })
 );
@@ -180,6 +206,11 @@ app.use(
 app.use(
   '/api/payments',
   require('./routes/payment.routes')
+);
+
+app.use(
+  '/api/security',
+  require('./routes/security.routes')
 );
 
 /* =========================================================
