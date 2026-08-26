@@ -8,20 +8,33 @@ const {
   removeDevice,
   trustDevice,
   untrustDevice,
-  logoutAllDevices
+  logoutAllDevices,
+  getLoginHistory
+
 } = require('../controllers/securityController');
+
 
 
 const {
   requireAuth
+
 } = require('../middleware/auth');
+
+
 
 
 
 /*
 =========================================================
-GET ALL USER DEVICES
+DEVICE MANAGEMENT
 =========================================================
+*/
+
+
+/*
+GET ALL USER DEVICES
+
+Returns all logged-in devices
 */
 
 router.get(
@@ -33,10 +46,11 @@ router.get(
 
 
 
+
 /*
-=========================================================
 REMOVE DEVICE
-=========================================================
+
+Force remove a device session
 */
 
 router.delete(
@@ -48,10 +62,12 @@ router.delete(
 
 
 
+
+
 /*
-=========================================================
 TRUST DEVICE
-=========================================================
+
+Mark device as trusted
 */
 
 router.patch(
@@ -63,10 +79,12 @@ router.patch(
 
 
 
+
+
 /*
-=========================================================
 UNTRUST DEVICE
-=========================================================
+
+Remove trusted status
 */
 
 router.patch(
@@ -78,10 +96,13 @@ router.patch(
 
 
 
+
+
+
 /*
-=========================================================
 LOGOUT ALL DEVICES
-=========================================================
+
+Invalidate all trusted sessions
 */
 
 router.post(
@@ -89,6 +110,36 @@ router.post(
   requireAuth,
   logoutAllDevices
 );
+
+
+
+
+
+
+/*
+=========================================================
+LOGIN HISTORY
+=========================================================
+
+Shows:
+
+- Login time
+- Device used
+- Platform
+- IP address
+- User agent
+- Login status
+
+*/
+
+
+router.get(
+  '/login-history',
+  requireAuth,
+  getLoginHistory
+);
+
+
 
 
 

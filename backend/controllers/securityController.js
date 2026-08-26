@@ -1,5 +1,47 @@
 const DeviceSession = require('../models/DeviceSession');
+const LoginHistory =
+require('../models/LoginHistory');
 
+
+async function getLoginHistory(req,res,next){
+
+try{
+
+
+const history =
+
+await LoginHistory.find({
+
+user:req.user._id
+
+})
+
+.sort({
+
+createdAt:-1
+
+})
+
+.limit(50);
+
+
+
+res.json({
+
+success:true,
+
+history
+
+});
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
 
 
 /*
