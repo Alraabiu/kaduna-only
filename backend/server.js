@@ -83,55 +83,45 @@ app.use(
   })
 );
 
-/*
- * IMPORTANT:
- *
- * Paystack webhook signature verification requires
- * the ORIGINAL request body.
- *
- * Express normally parses JSON and removes access
- * to the original raw bytes.
- *
- * We preserve those bytes only for the Paystack webhook.
- */
 
 /*
- * =========================================================
- * PAYSTACK WEBHOOK RAW BODY HANDLING
- * =========================================================
- *
- * Must run before express.json().
- * Paystack signature verification requires
- * the exact original request bytes.
- *
- */
+=========================================================
+PAYSTACK RAW BODY HANDLER
+=========================================================
+Must come BEFORE express.json()
+=========================================================
+*/
 
 app.use(
   '/api/payments/paystack/webhook',
+
   express.raw({
-    type: 'application/json'
+    type: '*/*'
+  })
+);
+
+
+
+/*
+=========================================================
+NORMAL JSON BODY HANDLER
+=========================================================
+*/
+
+app.use(
+  express.json({
+    limit:'2mb'
   })
 );
 
 
 app.use(
-  express.json({
-    verify: (req, res, buf) => {
-
-      if (
-        req.originalUrl.startsWith(
-          '/api/payments/paystack/webhook'
-        )
-      ) {
-
-        req.rawBody =
-          Buffer.from(buf);
-
-      }
-
-    }
+  express.urlencoded({
+    extended:true,
+    limit:'2mb'
   })
 );
+
 
 app.use(morgan('dev'));
 
