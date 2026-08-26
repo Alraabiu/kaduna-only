@@ -9,28 +9,45 @@ const {
 
 async function paystackWebhook(req, res) {
 
-  const signature =
-    req.headers['x-paystack-signature'];
-
 
   try {
 
 
     /*
-     * =======================================================
-     * HANDLE RAW BODY PAYLOAD
-     * =======================================================
-     *
-     * If express.raw() is used, req.body becomes Buffer.
-     * Convert it back to JSON after signature validation
-     * preparation.
-     *
-     */
+    =========================================================
+    PAYSTACK RAW BODY RESTORATION
+    =========================================================
+
+    express.raw() gives req.body as Buffer.
+
+    We preserve the original bytes because Paystack
+    signature verification requires the exact payload.
+
+    =========================================================
+    */
+
+
+    if (
+      Buffer.isBuffer(req.body)
+    ) {
+
+      req.rawBody =
+        req.body;
+
+    }
+
 
 
     let body =
       req.body;
 
+
+
+    /*
+    =========================================================
+    CONVERT BUFFER TO JSON
+    =========================================================
+    */
 
 
     if (
@@ -44,17 +61,24 @@ async function paystackWebhook(req, res) {
             body.toString('utf8')
           );
 
+
       } catch(error) {
 
+
         console.error(
-          '[PAYSTACK WEBHOOK] Invalid JSON body'
+          '[PAYSTACK WEBHOOK] Invalid JSON payload'
         );
+
 
         return res
           .status(400)
           .json({
+
             success:false,
-            message:'Invalid webhook payload'
+
+            message:
+            'Invalid webhook payload'
+
           });
 
       }
@@ -64,32 +88,38 @@ async function paystackWebhook(req, res) {
 
 
 
+    const signature =
+      req.headers['x-paystack-signature'];
+
+
+
+
     console.log(
       '[PAYSTACK WEBHOOK DEBUG]',
       {
 
         hasRawBody:
-          !!req.rawBody,
+        !!req.rawBody,
 
 
         rawBodyLength:
-          req.rawBody?.length || 0,
+        req.rawBody?.length || 0,
 
 
         hasSignature:
-          !!signature,
+        !!signature,
 
 
         signatureLength:
-          String(signature || '').length,
+        String(signature || '').length,
 
 
         event:
-          body?.event || null,
+        body?.event || null,
 
 
         reference:
-          body?.data?.reference || null
+        body?.data?.reference || null
 
       }
     );
@@ -97,21 +127,23 @@ async function paystackWebhook(req, res) {
 
 
 
+
     /*
-     * =======================================================
-     * VERIFY PAYSTACK SIGNATURE
-     * =======================================================
-     *
-     * Must use original raw request bytes.
-     *
-     */
+    =========================================================
+    VERIFY SIGNATURE
+    =========================================================
+    */
 
 
     const signatureValid =
       validWebhookSignature(
+
         req.rawBody,
+
         signature
+
       );
+
 
 
 
@@ -132,7 +164,7 @@ async function paystackWebhook(req, res) {
           success:false,
 
           message:
-            'Invalid webhook signature'
+          'Invalid webhook signature'
 
         });
 
@@ -141,23 +173,12 @@ async function paystackWebhook(req, res) {
 
 
 
-    /*
-     * =======================================================
-     * ACKNOWLEDGE PAYSTACK
-     * =======================================================
-     */
-
-
-    res.sendStatus(200);
-
-
-
 
     /*
-     * =======================================================
-     * HANDLE ONLY SUCCESSFUL PAYMENTS
-     * =======================================================
-     */
+    =========================================================
+    HANDLE ONLY PAYMENT SUCCESS
+    =========================================================
+    */
 
 
     if (
@@ -167,12 +188,13 @@ async function paystackWebhook(req, res) {
 
 
       console.log(
-        '[PAYSTACK WEBHOOK] Ignoring event:',
+        '[PAYSTACK WEBHOOK] Ignored event:',
         body?.event
       );
 
 
-      return;
+      return res
+        .sendStatus(200);
 
     }
 
@@ -180,7 +202,7 @@ async function paystackWebhook(req, res) {
 
 
     const data =
-      body.data;
+      body?.data;
 
 
 
@@ -190,11 +212,12 @@ async function paystackWebhook(req, res) {
 
 
       console.error(
-        '[PAYSTACK WEBHOOK] Missing data payload'
+        '[PAYSTACK WEBHOOK] Missing data'
       );
 
 
-      return;
+      return res
+        .sendStatus(200);
 
     }
 
@@ -220,23 +243,27 @@ async function paystackWebhook(req, res) {
       );
 
 
-      return;
+      return res
+        .sendStatus(200);
 
     }
 
 
 
 
+
     /*
-     * =======================================================
-     * FIND PAYMENT RECORD
-     * =======================================================
-     */
+    =========================================================
+    FIND PAYMENT
+    =========================================================
+    */
 
 
     const payment =
       await Payment.findOne({
+
         reference
+
       });
 
 
@@ -253,9 +280,11 @@ async function paystackWebhook(req, res) {
       );
 
 
-      return;
+      return res
+        .sendStatus(200);
 
     }
+
 
 
 
@@ -265,19 +294,19 @@ async function paystackWebhook(req, res) {
       {
 
         paymentId:
-          String(payment._id),
+        String(payment._id),
 
 
         reference:
-          payment.reference,
+        payment.reference,
 
 
         amount:
-          payment.amount,
+        payment.amount,
 
 
         status:
-          payment.status
+        payment.status
 
       }
     );
@@ -287,24 +316,35 @@ async function paystackWebhook(req, res) {
 
 
     /*
-     * =======================================================
-     * CREDIT WALLET
-     * =======================================================
-     *
-     * Handles:
-     *
-     * - duplicate webhook protection
-     * - amount verification
-     * - wallet update
-     * - payment completion
-     *
-     */
+    =========================================================
+    ACKNOWLEDGE PAYSTACK
+
+    After signature validation.
+    =========================================================
+    */
+
+
+    res
+      .sendStatus(200);
+
+
+
+
+
+    /*
+    =========================================================
+    COMPLETE WALLET TOPUP
+    =========================================================
+    */
 
 
     const result =
       await fulfillWalletTopup(
+
         payment,
+
         data
+
       );
 
 
@@ -319,14 +359,15 @@ async function paystackWebhook(req, res) {
 
 
         status:
-          result?.status,
+        result?.status,
 
 
         credited:
-          result?.credited
+        result?.credited
 
       }
     );
+
 
 
 
@@ -353,7 +394,7 @@ async function paystackWebhook(req, res) {
           success:false,
 
           message:
-            'Webhook processing failed'
+          'Webhook processing failed'
 
         });
 
@@ -362,6 +403,7 @@ async function paystackWebhook(req, res) {
   }
 
 }
+
 
 
 
