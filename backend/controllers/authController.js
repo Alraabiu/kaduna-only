@@ -18,6 +18,12 @@ const {
   recordLogin
 } = require('../services/loginHistoryService');
 
+const {
+ createAlert
+}
+=
+require('../services/securityAlertService');
+
 
 
 const publicUser = u => ({
@@ -483,22 +489,100 @@ SAVE DEVICE SESSION
 */
 
 
+const deviceResult =
+
 await registerOrUpdateDevice({
 
-userId:u._id,
+  userId: u._id,
 
-deviceId:currentDeviceId,
+  deviceId: currentDeviceId,
 
-deviceName:finalDeviceName,
+  deviceName:
+    deviceName ||
+    req.headers['x-device-name'] ||
+    'Web Browser',
 
-platform:finalPlatform,
+  platform:
+    platform ||
+    req.headers['x-platform'] ||
+    'web',
 
-ipAddress:req.ip,
+  ipAddress:
+    req.ip,
 
-userAgent:req.headers['user-agent']
+  userAgent:
+    req.headers['user-agent']
 
 });
 
+
+
+/*
+====================================================
+SECURITY ALERT CHECK
+====================================================
+*/
+
+
+if(deviceResult.isNew){
+
+
+  await createAlert({
+
+    userId:u._id,
+
+    type:'NEW_DEVICE',
+
+    message:
+    'New device login detected',
+
+    deviceId:
+      deviceResult.deviceId,
+
+    ipAddress:
+      req.ip,
+
+    userAgent:
+      req.headers['user-agent']
+
+  });
+
+
+}
+
+
+
+if(
+
+  deviceResult.previousIp &&
+
+  deviceResult.previousIp !== req.ip
+
+){
+
+
+  await createAlert({
+
+    userId:u._id,
+
+    type:'NEW_IP',
+
+    message:
+    'Login detected from a new IP address',
+
+    deviceId:
+      deviceResult.deviceId,
+
+    ipAddress:
+      req.ip,
+
+    userAgent:
+      req.headers['user-agent']
+
+  });
+
+
+}
 
 
 
