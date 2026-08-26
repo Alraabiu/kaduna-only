@@ -1,7 +1,11 @@
-const DeviceSession = require('../models/DeviceSession');
+const DeviceSession =
+require('../models/DeviceSession');
 
 const LoginHistory =
 require('../models/LoginHistory');
+
+const SecurityAlert =
+require('../models/SecurityAlert');
 
 
 
@@ -40,12 +44,164 @@ async function getLoginHistory(req,res,next){
 
 
 
+    res.json({
+
+      success:true,
+
+      count:
+        history.length,
+
+      history
+
+    });
+
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
+
+
+
+
+/*
+=========================================================
+GET SECURITY ALERTS
+=========================================================
+*/
+
+async function getAlerts(req,res,next){
+
+  try{
+
+
+    const alerts =
+
+      await SecurityAlert.find({
+
+        user:req.user._id
+
+      })
+
+      .sort({
+
+        createdAt:-1
+
+      })
+
+      .limit(50)
+
+      .select(
+
+        'type message deviceId ipAddress resolved createdAt userAgent'
+
+      );
+
+
+
 
     res.json({
 
       success:true,
 
-      history
+      count:
+        alerts.length,
+
+      alerts
+
+    });
+
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
+
+
+
+
+/*
+=========================================================
+RESOLVE SECURITY ALERT
+=========================================================
+*/
+
+async function resolveAlert(req,res,next){
+
+  try{
+
+
+    const alert =
+
+      await SecurityAlert.findOneAndUpdate(
+
+        {
+
+          _id:req.params.id,
+
+          user:req.user._id
+
+        },
+
+
+        {
+
+          $set:{
+
+            resolved:true
+
+          }
+
+        },
+
+
+        {
+
+          returnDocument:'after'
+
+        }
+
+      );
+
+
+
+
+    if(!alert){
+
+      return res.status(404).json({
+
+        success:false,
+
+        message:
+          'Security alert not found'
+
+      });
+
+    }
+
+
+
+
+    res.json({
+
+      success:true,
+
+      message:
+        'Security alert resolved',
+
+      alert
 
     });
 
@@ -102,6 +258,9 @@ async function getDevices(req,res,next){
 
       success:true,
 
+      count:
+        devices.length,
+
       devices
 
     });
@@ -133,8 +292,11 @@ async function removeDevice(req,res,next){
 
 
     const {
+
       deviceId
+
     } = req.params;
+
 
 
 
@@ -159,12 +321,11 @@ async function removeDevice(req,res,next){
         success:false,
 
         message:
-        'Device not found'
+          'Device not found'
 
       });
 
     }
-
 
 
 
@@ -174,11 +335,9 @@ async function removeDevice(req,res,next){
       success:true,
 
       message:
-      'Device removed successfully'
+        'Device removed successfully'
 
     });
-
-
 
 
 
@@ -207,8 +366,11 @@ async function trustDevice(req,res,next){
 
 
     const {
+
       deviceId
+
     } = req.params;
+
 
 
 
@@ -224,17 +386,20 @@ async function trustDevice(req,res,next){
 
         },
 
+
         {
 
           $set:{
 
             trusted:true,
 
-            lastActiveAt:new Date()
+            lastActiveAt:
+              new Date()
 
           }
 
         },
+
 
         {
 
@@ -247,7 +412,6 @@ async function trustDevice(req,res,next){
 
 
 
-
     if(!device){
 
       return res.status(404).json({
@@ -255,12 +419,11 @@ async function trustDevice(req,res,next){
         success:false,
 
         message:
-        'Device not found'
+          'Device not found'
 
       });
 
     }
-
 
 
 
@@ -270,13 +433,11 @@ async function trustDevice(req,res,next){
       success:true,
 
       message:
-      'Device trusted successfully',
+        'Device trusted successfully',
 
       device
 
     });
-
-
 
 
 
@@ -305,8 +466,11 @@ async function untrustDevice(req,res,next){
 
 
     const {
+
       deviceId
+
     } = req.params;
+
 
 
 
@@ -322,6 +486,7 @@ async function untrustDevice(req,res,next){
 
         },
 
+
         {
 
           $set:{
@@ -331,6 +496,7 @@ async function untrustDevice(req,res,next){
           }
 
         },
+
 
         {
 
@@ -351,12 +517,11 @@ async function untrustDevice(req,res,next){
         success:false,
 
         message:
-        'Device not found'
+          'Device not found'
 
       });
 
     }
-
 
 
 
@@ -366,13 +531,11 @@ async function untrustDevice(req,res,next){
       success:true,
 
       message:
-      'Device untrusted',
+        'Device untrusted',
 
       device
 
     });
-
-
 
 
 
@@ -408,6 +571,7 @@ async function logoutAllDevices(req,res,next){
 
       },
 
+
       {
 
         $set:{
@@ -423,17 +587,14 @@ async function logoutAllDevices(req,res,next){
 
 
 
-
     res.json({
 
       success:true,
 
       message:
-      'All devices have been logged out'
+        'All devices have been logged out'
 
     });
-
-
 
 
 
@@ -452,6 +613,7 @@ async function logoutAllDevices(req,res,next){
 
 module.exports = {
 
+
   getDevices,
 
   removeDevice,
@@ -462,6 +624,11 @@ module.exports = {
 
   logoutAllDevices,
 
-  getLoginHistory
+  getLoginHistory,
+
+  getAlerts,
+
+  resolveAlert
+
 
 };
