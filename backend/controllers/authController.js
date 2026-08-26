@@ -25,34 +25,38 @@ const publicUser = u => ({
 
 
 
+/*
+=========================================================
+REGISTER
+=========================================================
+*/
 
+async function register(req,res,next){
 
-async function register(req, res, next) {
-
-  try {
+  try{
 
     const {
       fullName,
       phone,
       email,
       password,
-      role = 'rider'
-    } = req.body;
+      role='rider'
+    } = req.body || {};
 
 
 
-    if (
+    if(
       !fullName ||
       !phone ||
       !password
-    ) {
+    ){
 
       return res.status(400).json({
 
         success:false,
 
         message:
-          'Full name, phone and password are required'
+        'Full name, phone and password are required'
 
       });
 
@@ -60,16 +64,16 @@ async function register(req, res, next) {
 
 
 
-    if (
+    if(
       !['rider','driver'].includes(role)
-    ) {
+    ){
 
       return res.status(400).json({
 
         success:false,
 
         message:
-          'Only rider or driver registration is allowed'
+        'Only rider or driver registration is allowed'
 
       });
 
@@ -77,16 +81,16 @@ async function register(req, res, next) {
 
 
 
-    if (
+    if(
       password.length < 8
-    ) {
+    ){
 
       return res.status(400).json({
 
         success:false,
 
         message:
-          'Password must be at least 8 characters'
+        'Password must be at least 8 characters'
 
       });
 
@@ -104,13 +108,15 @@ async function register(req, res, next) {
           },
 
           ...(email
-            ? [
-                {
-                  email:
-                    email.toLowerCase()
-                }
-              ]
-            : [])
+            ?
+            [
+              {
+                email:
+                email.toLowerCase()
+              }
+            ]
+            :
+            [])
 
         ]
 
@@ -118,14 +124,14 @@ async function register(req, res, next) {
 
 
 
-    if (exists) {
+    if(exists){
 
       return res.status(409).json({
 
         success:false,
 
         message:
-          'Phone or email already registered'
+        'Phone or email already registered'
 
       });
 
@@ -161,20 +167,20 @@ async function register(req, res, next) {
     await Wallet.create({
 
       user:
-        user._id
+      user._id
 
     });
 
 
 
-    if (
+    if(
       role === 'driver'
-    ) {
+    ){
 
       await DriverProfile.create({
 
         user:
-          user._id
+        user._id
 
       });
 
@@ -187,15 +193,15 @@ async function register(req, res, next) {
       success:true,
 
       message:
-        'Account created successfully',
+      'Account created successfully',
 
       data:{
 
         user:
-          publicUser(user),
+        publicUser(user),
 
         token:
-          signToken(user)
+        signToken(user)
 
       }
 
@@ -203,7 +209,7 @@ async function register(req, res, next) {
 
 
 
-  } catch(error) {
+  }catch(error){
 
     next(error);
 
@@ -216,49 +222,65 @@ async function register(req, res, next) {
 
 
 
+/*
+=========================================================
+LOGIN WITH DEVICE SECURITY
+=========================================================
+*/
 
-async function login(req,res,next) {
+async function login(req,res,next){
 
-  try {
+  try{
 
 
     const {
+
       phone,
+
       password,
 
       deviceId,
+
       deviceName,
+
       platform
 
-    } = req.body;
+    } = req.body || {};
+
 
 
 
     const u =
       await User.findOne({
+
         phone
+
       })
       .select('+passwordHash');
 
 
 
-    if (
+
+    if(
 
       !u ||
 
       !(await bcrypt.compare(
+
         password || '',
+
         u.passwordHash
+
       ))
 
-    ) {
+    ){
 
       return res.status(401).json({
 
         success:false,
 
         message:
-          'Invalid phone or password'
+        'Invalid phone or password'
 
       });
 
@@ -267,16 +289,18 @@ async function login(req,res,next) {
 
 
 
-    if (
+    if(
+
       u.status !== 'active'
-    ) {
+
+    ){
 
       return res.status(403).json({
 
         success:false,
 
         message:
-          'Account is suspended'
+        'Account is suspended'
 
       });
 
@@ -286,72 +310,91 @@ async function login(req,res,next) {
 
 
     /*
-     * =========================================
-     * DEVICE SECURITY REGISTRATION
-     * =========================================
-     *
-     * Every successful login registers
-     * the current device.
-     *
-     */
+    =====================================================
+    DEVICE SECURITY
+
+    Every login creates/updates a device record.
+
+    Priority:
+    1. App supplied deviceId
+    2. Browser supplied deviceId
+    3. Temporary fallback
+
+    =====================================================
+    */
 
 
     const currentDeviceId =
+
       deviceId ||
 
-      req.headers['x-device-id'];
+      req.headers['x-device-id'] ||
+
+      `browser-${
+
+        Buffer
+
+        .from(
+
+          `${req.ip}-${req.headers['user-agent']}`
+
+        )
+
+        .toString('base64')
+
+        .replace(/[^a-zA-Z0-9]/g,'')
+
+        .slice(0,32)
+
+      }`;
 
 
 
-    if (
-      currentDeviceId
-    ) {
+
+    await registerOrUpdateDevice({
+
+      userId:
+
+      u._id,
 
 
-      await registerOrUpdateDevice({
+      deviceId:
 
-        userId:
-          u._id,
-
-
-        deviceId:
-          currentDeviceId,
-
-
-        deviceName:
-
-          deviceName ||
-
-          req.headers['x-device-name'] ||
-
-          'Unknown device',
+      currentDeviceId,
 
 
 
-        platform:
+      deviceName:
 
-          platform ||
+      deviceName ||
 
-          req.headers['x-platform'] ||
+      req.headers['x-device-name'] ||
 
-          'unknown',
-
-
-
-        ipAddress:
-
-          req.ip,
+      'Web Browser',
 
 
 
-        userAgent:
+      platform:
 
-          req.headers['user-agent']
+      platform ||
 
-      });
+      req.headers['x-platform'] ||
+
+      'web',
 
 
-    }
+
+      ipAddress:
+
+      req.ip,
+
+
+
+      userAgent:
+
+      req.headers['user-agent']
+
+    });
 
 
 
@@ -362,17 +405,17 @@ async function login(req,res,next) {
       success:true,
 
       message:
-        'Login successful',
+      'Login successful',
 
 
       data:{
 
         user:
-          publicUser(u),
+        publicUser(u),
 
 
         token:
-          signToken(u)
+        signToken(u)
 
       }
 
@@ -380,7 +423,8 @@ async function login(req,res,next) {
 
 
 
-  } catch(error) {
+
+  }catch(error){
 
     next(error);
 
@@ -393,9 +437,13 @@ async function login(req,res,next) {
 
 
 
+/*
+=========================================================
+CURRENT USER
+=========================================================
+*/
 
-async function me(req,res) {
-
+async function me(req,res){
 
   res.json({
 
@@ -404,16 +452,13 @@ async function me(req,res) {
     data:{
 
       user:
-        publicUser(req.user)
+      publicUser(req.user)
 
     }
 
   });
 
-
 }
-
-
 
 
 
