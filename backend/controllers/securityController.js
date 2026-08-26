@@ -1,47 +1,67 @@
 const DeviceSession = require('../models/DeviceSession');
+
 const LoginHistory =
 require('../models/LoginHistory');
 
 
+
+/*
+=========================================================
+GET LOGIN HISTORY
+=========================================================
+*/
+
 async function getLoginHistory(req,res,next){
 
-try{
+  try{
 
 
-const history =
+    const history =
 
-await LoginHistory.find({
+      await LoginHistory.find({
 
-user:req.user._id
+        user:req.user._id
 
-})
+      })
 
-.sort({
+      .sort({
 
-createdAt:-1
+        createdAt:-1
 
-})
+      })
 
-.limit(50);
+      .limit(50)
 
+      .select(
 
+        'deviceId deviceName platform ipAddress status createdAt userAgent'
 
-res.json({
-
-success:true,
-
-history
-
-});
+      );
 
 
-}catch(error){
 
-next(error);
+
+    res.json({
+
+      success:true,
+
+      history
+
+    });
+
+
+
+  }catch(error){
+
+    next(error);
+
+  }
 
 }
 
-}
+
+
+
 
 
 /*
@@ -71,7 +91,7 @@ async function getDevices(req,res,next){
 
       .select(
 
-        'deviceId deviceName platform trusted lastActiveAt createdAt ipAddress'
+        'deviceId deviceName platform trusted lastActiveAt createdAt ipAddress userAgent'
 
       );
 
@@ -113,11 +133,8 @@ async function removeDevice(req,res,next){
 
 
     const {
-
       deviceId
-
     } = req.params;
-
 
 
 
@@ -147,6 +164,7 @@ async function removeDevice(req,res,next){
       });
 
     }
+
 
 
 
@@ -189,11 +207,8 @@ async function trustDevice(req,res,next){
 
 
     const {
-
       deviceId
-
     } = req.params;
-
 
 
 
@@ -249,6 +264,7 @@ async function trustDevice(req,res,next){
 
 
 
+
     res.json({
 
       success:true,
@@ -289,11 +305,8 @@ async function untrustDevice(req,res,next){
 
 
     const {
-
       deviceId
-
     } = req.params;
-
 
 
 
@@ -343,6 +356,7 @@ async function untrustDevice(req,res,next){
       });
 
     }
+
 
 
 
@@ -409,6 +423,7 @@ async function logoutAllDevices(req,res,next){
 
 
 
+
     res.json({
 
       success:true,
@@ -437,7 +452,6 @@ async function logoutAllDevices(req,res,next){
 
 module.exports = {
 
-
   getDevices,
 
   removeDevice,
@@ -446,7 +460,8 @@ module.exports = {
 
   untrustDevice,
 
-  logoutAllDevices
+  logoutAllDevices,
 
+  getLoginHistory
 
 };
