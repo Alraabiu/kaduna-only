@@ -351,51 +351,49 @@ async function login(req,res,next){
 
 
 
-    await registerOrUpdateDevice({
-
-      userId:
-
-      u._id,
-
-
-      deviceId:
-
-      currentDeviceId,
+    console.log('[DEVICE SECURITY START]', {
+  userId: String(u._id),
+  deviceId: currentDeviceId
+});
 
 
+await registerOrUpdateDevice({
 
-      deviceName:
+  userId: u._id,
 
-      deviceName ||
+  deviceId: currentDeviceId,
 
-      req.headers['x-device-name'] ||
+  deviceName:
 
-      'Web Browser',
+    deviceName ||
 
+    req.headers['x-device-name'] ||
 
-
-      platform:
-
-      platform ||
-
-      req.headers['x-platform'] ||
-
-      'web',
+    'Web Browser',
 
 
+  platform:
 
-      ipAddress:
+    platform ||
 
-      req.ip,
+    req.headers['x-platform'] ||
+
+    'web',
 
 
+  ipAddress:
 
-      userAgent:
+    req.ip,
 
-      req.headers['user-agent']
 
-    });
+  userAgent:
 
+    req.headers['user-agent']
+
+});
+
+
+console.log('[DEVICE SECURITY SAVED]');
 
 
 
