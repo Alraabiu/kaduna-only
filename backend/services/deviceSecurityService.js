@@ -1,28 +1,62 @@
 const crypto = require('crypto');
 
-const DeviceSession = require('../models/DeviceSession');
+const DeviceSession =
+require('../models/DeviceSession');
 
 
+
+/*
+=========================================================
+GENERATE DEVICE ID
+=========================================================
+*/
 
 function generateDeviceId({
+
   userAgent,
+
   ipAddress
+
 }) {
 
+
   const fingerprint =
+
     `${userAgent || 'unknown'}-${ipAddress || 'unknown'}-${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
 
 
+
   return crypto
+
     .createHash('sha256')
+
     .update(fingerprint)
+
     .digest('hex');
+
 
 }
 
 
 
 
+
+
+/*
+=========================================================
+REGISTER OR UPDATE DEVICE
+
+Returns:
+
+{
+ device,
+ isNew,
+ previousIp,
+ deviceId
+}
+
+=========================================================
+*/
 
 async function registerOrUpdateDevice({
 
@@ -41,7 +75,8 @@ async function registerOrUpdateDevice({
 }) {
 
 
-  if (!userId) {
+
+  if(!userId){
 
     throw new Error(
       'User ID is required'
@@ -51,136 +86,183 @@ async function registerOrUpdateDevice({
 
 
 
+
+
   /*
-   * Generate device ID automatically
-   * when frontend does not provide one.
-   */
+  =======================================================
+  DEVICE ID RESOLUTION
+  =======================================================
+  */
+
 
   const finalDeviceId =
+
     deviceId ||
+
     generateDeviceId({
+
       userAgent,
+
       ipAddress
+
     });
 
 
 
+
+
+
+
+  /*
+  =======================================================
+  CHECK EXISTING DEVICE FIRST
+
+  Required for security alerts
+
+  =======================================================
+  */
+
+
+  const existingDevice =
+
+    await DeviceSession.findOne({
+
+      user:userId,
+
+      deviceId:finalDeviceId
+
+    });
+
+
+
+
+
+  const isNew =
+
+    !existingDevice;
+
+
+
+
+  const previousIp =
+
+    existingDevice?.ipAddress || null;
+
+
+
+
+
+
+
+  /*
+  =======================================================
+  CREATE OR UPDATE DEVICE
+  =======================================================
+  */
+
+
   const device =
+
     await DeviceSession.findOneAndUpdate(
 
       {
 
-        user:
-          userId,
 
-        deviceId:
-          finalDeviceId
+        user:userId,
+
+
+        deviceId:finalDeviceId
+
 
       },
 
 
       {
 
-        $set: {
+
+        $set:{
+
 
           deviceName:
+
             deviceName ||
+
             detectDeviceName(userAgent),
 
 
+
           platform:
+
             platform ||
+
             detectPlatform(userAgent),
+
 
 
           ipAddress,
 
 
+
           userAgent,
 
 
+
           lastActiveAt:
+
             new Date()
+
 
         },
 
 
-        $setOnInsert: {
 
-          trusted:
-            true
+        $setOnInsert:{
+
+
+          trusted:true
+
 
         }
+
 
       },
 
 
       {
 
+
         upsert:true,
+
 
         returnDocument:'after'
 
+
       }
+
 
     );
 
 
 
-  return device;
-
-}
 
 
 
+  return {
 
 
-
-function detectPlatform(userAgent='') {
-
-
-  const agent =
-    userAgent.toLowerCase();
+    device,
 
 
-  if (
-    agent.includes('android')
-  ) {
-
-    return 'android';
-
-  }
+    isNew,
 
 
-  if (
-    agent.includes('iphone') ||
-    agent.includes('ipad')
-  ) {
-
-    return 'ios';
-
-  }
+    previousIp,
 
 
-  if (
-    agent.includes('windows')
-  ) {
-
-    return 'windows';
-
-  }
+    deviceId:finalDeviceId
 
 
-  if (
-    agent.includes('mac')
-  ) {
-
-    return 'mac';
-
-  }
-
-
-  return 'unknown';
+  };
 
 }
 
@@ -190,36 +272,12 @@ function detectPlatform(userAgent='') {
 
 
 
-function detectDeviceName(userAgent='') {
 
-
-  if (
-    userAgent.includes('Android')
-  ) {
-
-    return 'Android Device';
-
-  }
-
-
-  if (
-    userAgent.includes('iPhone')
-  ) {
-
-    return 'iPhone';
-
-  }
-
-
-  return 'Unknown Device';
-
-}
-
-
-
-
-
-
+/*
+=========================================================
+GET USER DEVICE
+=========================================================
+*/
 
 
 async function getUserDevice({
@@ -233,12 +291,12 @@ async function getUserDevice({
 
   return DeviceSession.findOne({
 
-    user:
-      userId,
+    user:userId,
 
     deviceId
 
   });
+
 
 }
 
@@ -246,6 +304,14 @@ async function getUserDevice({
 
 
 
+
+
+
+/*
+=========================================================
+CHECK TRUSTED DEVICE
+=========================================================
+*/
 
 
 async function isTrustedDevice({
@@ -258,6 +324,7 @@ async function isTrustedDevice({
 
 
   const device =
+
     await getUserDevice({
 
       userId,
@@ -265,6 +332,7 @@ async function isTrustedDevice({
       deviceId
 
     });
+
 
 
 
@@ -284,14 +352,196 @@ async function isTrustedDevice({
 
 
 
+
+
+
+/*
+=========================================================
+DEVICE PLATFORM DETECTION
+=========================================================
+*/
+
+
+function detectPlatform(userAgent=''){
+
+
+  const agent =
+
+    userAgent.toLowerCase();
+
+
+
+
+  if(agent.includes('android')){
+
+
+    return 'android';
+
+
+  }
+
+
+
+
+
+  if(
+
+    agent.includes('iphone') ||
+
+    agent.includes('ipad')
+
+  ){
+
+
+    return 'ios';
+
+
+  }
+
+
+
+
+
+
+  if(agent.includes('windows')){
+
+
+    return 'windows';
+
+
+  }
+
+
+
+
+
+
+  if(agent.includes('mac')){
+
+
+    return 'mac';
+
+
+  }
+
+
+
+
+
+  return 'unknown';
+
+
+}
+
+
+
+
+
+
+
+
+/*
+=========================================================
+DEVICE NAME DETECTION
+=========================================================
+*/
+
+
+function detectDeviceName(userAgent=''){
+
+
+  const agent =
+
+    userAgent.toLowerCase();
+
+
+
+
+  if(agent.includes('android')){
+
+
+    return 'Android Device';
+
+
+  }
+
+
+
+
+
+  if(agent.includes('iphone')){
+
+
+    return 'iPhone';
+
+
+  }
+
+
+
+
+
+  if(agent.includes('ipad')){
+
+
+    return 'iPad';
+
+
+  }
+
+
+
+
+
+  if(agent.includes('windows')){
+
+
+    return 'Windows Browser';
+
+
+  }
+
+
+
+
+
+  if(agent.includes('mac')){
+
+
+    return 'Mac Browser';
+
+
+  }
+
+
+
+
+
+  return 'Unknown Device';
+
+
+}
+
+
+
+
+
+
+
+
 module.exports = {
+
 
   registerOrUpdateDevice,
 
+
   getUserDevice,
+
 
   isTrustedDevice,
 
+
   generateDeviceId
+
 
 };
