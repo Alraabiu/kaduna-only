@@ -3,50 +3,81 @@ require('../models/LoginHistory');
 
 
 
-async function recordLogin({
+async function recordLogin(data){
 
-userId,
-
-deviceId,
-
-deviceName,
-
-platform,
-
-ipAddress,
-
-userAgent,
-
-status='success'
-
-}){
+  try {
 
 
-return LoginHistory.create({
+    console.log(
+      '[LOGIN HISTORY START]',
+      {
+        userId:String(data.userId),
+        deviceId:data.deviceId
+      }
+    );
 
-user:userId,
 
-deviceId,
+    const record =
 
-deviceName,
+      await LoginHistory.create({
 
-platform,
+        user:data.userId,
 
-ipAddress,
+        deviceId:data.deviceId,
 
-userAgent,
+        deviceName:
+          data.deviceName ||
+          'Unknown device',
 
-status
+        platform:
+          data.platform ||
+          'unknown',
 
-});
+        ipAddress:
+          data.ipAddress,
 
+        userAgent:
+          data.userAgent,
+
+        status:
+          data.status ||
+          'success'
+
+      });
+
+
+
+    console.log(
+      '[LOGIN HISTORY CREATED]',
+      {
+        id:String(record._id)
+      }
+    );
+
+
+    return record;
+
+
+
+  } catch(error){
+
+
+    console.error(
+      '[LOGIN HISTORY ERROR]',
+      error
+    );
+
+
+    throw error;
+
+  }
 
 }
 
 
 
-module.exports={
+module.exports = {
 
-recordLogin
+  recordLogin
 
 };

@@ -513,19 +513,25 @@ SAVE LOGIN HISTORY
 
 await recordLogin({
 
-userId:u._id,
+  userId:u._id,
 
-deviceId:currentDeviceId,
+  deviceId:currentDeviceId,
 
-deviceName:finalDeviceName,
+  deviceName:
+    deviceName ||
+    req.headers['x-device-name'] ||
+    'Web Browser',
 
-platform:finalPlatform,
+  platform:
+    platform ||
+    req.headers['x-platform'] ||
+    'web',
 
-ipAddress:req.ip,
+  ipAddress:
+    req.ip,
 
-userAgent:req.headers['user-agent'],
-
-status:'success'
+  userAgent:
+    req.headers['user-agent']
 
 });
 
