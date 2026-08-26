@@ -1,13 +1,27 @@
+const dns = require('dns');
+
+dns.setServers([
+  '8.8.8.8',
+  '1.1.1.1'
+]);
+
+
 require('dotenv').config();
+
 
 const crypto = require('crypto');
 
-const paystackKeyCheck = String(
-  process.env.PAYSTACK_SECRET_KEY || ''
-).trim();
+
+const paystackKeyCheck =
+  String(
+    process.env.PAYSTACK_SECRET_KEY || ''
+  ).trim();
+
 
 console.log('[PAYSTACK CONFIG]', {
-  configured: !!paystackKeyCheck,
+
+  configured:
+    !!paystackKeyCheck,
 
   environment:
     paystackKeyCheck.startsWith('sk_live_')
@@ -26,6 +40,7 @@ console.log('[PAYSTACK CONFIG]', {
           .update(paystackKeyCheck)
           .digest('hex')
       : ''
+
 });
 
 const express = require('express');
