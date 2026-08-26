@@ -13,6 +13,7 @@ const {
 } = require('../services/deviceSecurityService');
 
 
+
 const publicUser = u => ({
   id: u._id,
   fullName: u.fullName,
@@ -21,6 +22,8 @@ const publicUser = u => ({
   role: u.role,
   status: u.status
 });
+
+
 
 
 
@@ -37,6 +40,7 @@ async function register(req, res, next) {
     } = req.body;
 
 
+
     if (
       !fullName ||
       !phone ||
@@ -45,7 +49,7 @@ async function register(req, res, next) {
 
       return res.status(400).json({
 
-        success: false,
+        success:false,
 
         message:
           'Full name, phone and password are required'
@@ -55,8 +59,9 @@ async function register(req, res, next) {
     }
 
 
+
     if (
-      !['rider', 'driver'].includes(role)
+      !['rider','driver'].includes(role)
     ) {
 
       return res.status(400).json({
@@ -69,6 +74,7 @@ async function register(req, res, next) {
       });
 
     }
+
 
 
     if (
@@ -85,6 +91,7 @@ async function register(req, res, next) {
       });
 
     }
+
 
 
     const exists =
@@ -110,6 +117,7 @@ async function register(req, res, next) {
       });
 
 
+
     if (exists) {
 
       return res.status(409).json({
@@ -124,11 +132,13 @@ async function register(req, res, next) {
     }
 
 
+
     const passwordHash =
       await bcrypt.hash(
         password,
         12
       );
+
 
 
     const user =
@@ -147,12 +157,14 @@ async function register(req, res, next) {
       });
 
 
+
     await Wallet.create({
 
       user:
         user._id
 
     });
+
 
 
     if (
@@ -167,6 +179,7 @@ async function register(req, res, next) {
       });
 
     }
+
 
 
     res.status(201).json({
@@ -189,9 +202,10 @@ async function register(req, res, next) {
     });
 
 
-  } catch(e) {
 
-    next(e);
+  } catch(error) {
+
+    next(error);
 
   }
 
@@ -200,15 +214,24 @@ async function register(req, res, next) {
 
 
 
-async function login(req, res, next) {
+
+
+
+async function login(req,res,next) {
 
   try {
 
 
     const {
       phone,
-      password
+      password,
+
+      deviceId,
+      deviceName,
+      platform
+
     } = req.body;
+
 
 
     const u =
@@ -220,11 +243,14 @@ async function login(req, res, next) {
 
 
     if (
+
       !u ||
+
       !(await bcrypt.compare(
         password || '',
         u.passwordHash
       ))
+
     ) {
 
       return res.status(401).json({
@@ -237,6 +263,7 @@ async function login(req, res, next) {
       });
 
     }
+
 
 
 
@@ -257,49 +284,76 @@ async function login(req, res, next) {
 
 
 
+
     /*
-     * DEVICE SECURITY FOUNDATION
+     * =========================================
+     * DEVICE SECURITY REGISTRATION
+     * =========================================
      *
-     * Register current device before issuing JWT.
+     * Every successful login registers
+     * the current device.
+     *
      */
 
-    await registerOrUpdateDevice({
 
-      userId:
-        u._id,
+    const currentDeviceId =
+      deviceId ||
 
-
-      deviceId:
-
-        req.headers['x-device-id'] ||
-
-        'unknown-device',
+      req.headers['x-device-id'];
 
 
-      deviceName:
 
-        req.headers['x-device-name'] ||
-
-        'Unknown device',
-
-
-      platform:
-
-        req.headers['x-platform'] ||
-
-        'unknown',
+    if (
+      currentDeviceId
+    ) {
 
 
-      ipAddress:
+      await registerOrUpdateDevice({
 
-        req.ip,
+        userId:
+          u._id,
 
 
-      userAgent:
+        deviceId:
+          currentDeviceId,
 
-        req.headers['user-agent']
 
-    });
+        deviceName:
+
+          deviceName ||
+
+          req.headers['x-device-name'] ||
+
+          'Unknown device',
+
+
+
+        platform:
+
+          platform ||
+
+          req.headers['x-platform'] ||
+
+          'unknown',
+
+
+
+        ipAddress:
+
+          req.ip,
+
+
+
+        userAgent:
+
+          req.headers['user-agent']
+
+      });
+
+
+    }
+
+
 
 
 
@@ -325,9 +379,10 @@ async function login(req, res, next) {
     });
 
 
-  } catch(e) {
 
-    next(e);
+  } catch(error) {
+
+    next(error);
 
   }
 
@@ -336,7 +391,11 @@ async function login(req, res, next) {
 
 
 
-async function me(req, res) {
+
+
+
+async function me(req,res) {
+
 
   res.json({
 
@@ -351,7 +410,11 @@ async function me(req, res) {
 
   });
 
+
 }
+
+
+
 
 
 
