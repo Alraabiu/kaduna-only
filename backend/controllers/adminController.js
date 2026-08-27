@@ -509,10 +509,10 @@ async function setUserStatus(req,res,next){
           }
         },
 
-        {
-          new:true,
-          runValidators:true
-        }
+       {
+  returnDocument:'after',
+  runValidators:true
+}
 
       ).select(
         'fullName phone email role status createdAt'
@@ -687,9 +687,9 @@ async function verifyDriver(req,res,next){
         },
 
         {
-          new:true,
-          runValidators:true
-        }
+  returnDocument:'after',
+  runValidators:true
+}
 
       ).populate(
         'user',
