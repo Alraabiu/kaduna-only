@@ -98,10 +98,7 @@ const DriverProfile = require("./models/DriverProfile");
         transactions: []
       }
     },
-    {
-      upsert: true,
-      new: true
-    }
+    { returnDocument: 'after' }
   );
 
   console.log("=== CLEANUP COMPLETE ===");

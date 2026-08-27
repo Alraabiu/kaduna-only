@@ -124,11 +124,7 @@ async function updatePricingConfig({
       {
         $set: next
       },
-      {
-        new: true,
-        upsert: true,
-        runValidators: true
-      }
+      { returnDocument: 'after' }
     );
 
   const normalized = normalize(

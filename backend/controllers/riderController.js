@@ -35,7 +35,19 @@ async function updateProfile(req,res,next){
       const duplicate=await User.findOne({_id:{$ne:req.user._id},email});
       if(duplicate) return res.status(409).json({success:false,message:'Email is already in use'});
     }
-    const user=await User.findByIdAndUpdate(req.user._id,{$set:{fullName,email:email||undefined}},{new:true,runValidators:true});
+    const user = await User.findByIdAndUpdate(
+  req.user._id,
+  {
+    $set:{
+      fullName,
+      email:email || undefined
+    }
+  },
+  {
+    returnDocument:'after',
+    runValidators:true
+  }
+);
     res.json({success:true,message:'Profile updated',data:{user:publicUser(user)}});
   }catch(e){next(e)}
 }

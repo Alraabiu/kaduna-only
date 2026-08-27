@@ -16,7 +16,7 @@ const Wallet = require("./models/Wallet");
         transactions: []
       }
     },
-    { new: true }
+    { returnDocument:'after' }
   );
 
   if (!wallet) {

@@ -26,9 +26,8 @@ const User = require('./models/User');
         }
       },
       {
-        upsert: true,
-        new: true
-      }
+  returnDocument:'after'
+}
     );
 
     console.log('');
