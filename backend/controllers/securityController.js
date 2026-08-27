@@ -1,11 +1,15 @@
 const DeviceSession =
 require('../models/DeviceSession');
 
+
 const LoginHistory =
 require('../models/LoginHistory');
 
+
 const SecurityAlert =
 require('../models/SecurityAlert');
+
+
 
 
 
@@ -17,203 +21,53 @@ GET LOGIN HISTORY
 
 async function getLoginHistory(req,res,next){
 
-  try{
+try{
 
 
-    const history =
+const history =
 
-      await LoginHistory.find({
+await LoginHistory.find({
 
-        user:req.user._id
+user:req.user._id
 
-      })
+})
 
-      .sort({
+.sort({
 
-        createdAt:-1
+createdAt:-1
 
-      })
+})
 
-      .limit(50)
+.limit(50)
 
-      .select(
+.select(
 
-        'deviceId deviceName platform ipAddress status createdAt userAgent'
+'deviceId deviceName platform ipAddress status createdAt userAgent'
 
-      );
-
-
-
-    res.json({
-
-      success:true,
-
-      count:
-        history.length,
-
-      history
-
-    });
+);
 
 
 
-  }catch(error){
+res.json({
 
-    next(error);
+success:true,
 
-  }
+history
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
 
 }
 
 
 
-
-
-
-/*
-=========================================================
-GET SECURITY ALERTS
-=========================================================
-*/
-
-async function getAlerts(req,res,next){
-
-  try{
-
-
-    const alerts =
-
-      await SecurityAlert.find({
-
-        user:req.user._id
-
-      })
-
-      .sort({
-
-        createdAt:-1
-
-      })
-
-      .limit(50)
-
-      .select(
-
-        'type message deviceId ipAddress resolved createdAt userAgent'
-
-      );
-
-
-
-
-    res.json({
-
-      success:true,
-
-      count:
-        alerts.length,
-
-      alerts
-
-    });
-
-
-
-  }catch(error){
-
-    next(error);
-
-  }
-
-}
-
-
-
-
-
-
-/*
-=========================================================
-RESOLVE SECURITY ALERT
-=========================================================
-*/
-
-async function resolveAlert(req,res,next){
-
-  try{
-
-
-    const alert =
-
-      await SecurityAlert.findOneAndUpdate(
-
-        {
-
-          _id:req.params.id,
-
-          user:req.user._id
-
-        },
-
-
-        {
-
-          $set:{
-
-            resolved:true
-
-          }
-
-        },
-
-
-        {
-
-          returnDocument:'after'
-
-        }
-
-      );
-
-
-
-
-    if(!alert){
-
-      return res.status(404).json({
-
-        success:false,
-
-        message:
-          'Security alert not found'
-
-      });
-
-    }
-
-
-
-
-    res.json({
-
-      success:true,
-
-      message:
-        'Security alert resolved',
-
-      alert
-
-    });
-
-
-
-  }catch(error){
-
-    next(error);
-
-  }
-
-}
 
 
 
@@ -228,52 +82,51 @@ GET USER DEVICES
 
 async function getDevices(req,res,next){
 
-  try{
+try{
 
 
-    const devices =
+const devices =
 
-      await DeviceSession.find({
+await DeviceSession.find({
 
-        user:req.user._id
+user:req.user._id
 
-      })
+})
 
-      .sort({
+.sort({
 
-        lastActiveAt:-1
+lastActiveAt:-1
 
-      })
+})
 
-      .select(
+.select(
 
-        'deviceId deviceName platform trusted lastActiveAt createdAt ipAddress userAgent'
+'deviceId deviceName platform trusted lastActiveAt createdAt ipAddress userAgent'
 
-      );
-
-
-
-
-    res.json({
-
-      success:true,
-
-      count:
-        devices.length,
-
-      devices
-
-    });
+);
 
 
 
-  }catch(error){
+res.json({
 
-    next(error);
+success:true,
 
-  }
+devices
+
+});
+
+
+
+}catch(error){
+
+next(error);
 
 }
+
+}
+
+
+
 
 
 
@@ -288,66 +141,65 @@ REMOVE DEVICE
 
 async function removeDevice(req,res,next){
 
-  try{
+try{
 
 
-    const {
-
-      deviceId
-
-    } = req.params;
-
+const {
+deviceId
+}=req.params;
 
 
 
-    const device =
+const device =
 
-      await DeviceSession.findOneAndDelete({
+await DeviceSession.findOneAndDelete({
 
-        user:req.user._id,
+user:req.user._id,
 
-        deviceId
+deviceId
 
-      });
+});
 
 
 
 
+if(!device){
 
-    if(!device){
+return res.status(404).json({
 
-      return res.status(404).json({
+success:false,
 
-        success:false,
+message:
+'Device not found'
 
-        message:
-          'Device not found'
-
-      });
-
-    }
-
-
-
-
-    res.json({
-
-      success:true,
-
-      message:
-        'Device removed successfully'
-
-    });
-
-
-
-  }catch(error){
-
-    next(error);
-
-  }
+});
 
 }
+
+
+
+
+res.json({
+
+success:true,
+
+message:
+'Device removed successfully'
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
 
 
 
@@ -362,92 +214,87 @@ TRUST DEVICE
 
 async function trustDevice(req,res,next){
 
-  try{
+try{
 
 
-    const {
-
-      deviceId
-
-    } = req.params;
-
+const {
+deviceId
+}=req.params;
 
 
 
-    const device =
+const device =
 
-      await DeviceSession.findOneAndUpdate(
+await DeviceSession.findOneAndUpdate(
 
-        {
+{
 
-          user:req.user._id,
+user:req.user._id,
 
-          deviceId
+deviceId
 
-        },
+},
 
+{
 
-        {
+$set:{
 
-          $set:{
+trusted:true,
 
-            trusted:true,
-
-            lastActiveAt:
-              new Date()
-
-          }
-
-        },
-
-
-        {
-
-          returnDocument:'after'
-
-        }
-
-      );
-
-
-
-
-    if(!device){
-
-      return res.status(404).json({
-
-        success:false,
-
-        message:
-          'Device not found'
-
-      });
-
-    }
-
-
-
-
-    res.json({
-
-      success:true,
-
-      message:
-        'Device trusted successfully',
-
-      device
-
-    });
-
-
-
-  }catch(error){
-
-    next(error);
-
-  }
+lastActiveAt:new Date()
 
 }
+
+},
+
+{
+
+returnDocument:'after'
+
+}
+
+);
+
+
+
+if(!device){
+
+return res.status(404).json({
+
+success:false,
+
+message:
+'Device not found'
+
+});
+
+}
+
+
+
+res.json({
+
+success:true,
+
+message:
+'Device trusted successfully',
+
+device
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
 
 
 
@@ -462,90 +309,85 @@ UNTRUST DEVICE
 
 async function untrustDevice(req,res,next){
 
-  try{
+try{
 
 
-    const {
-
-      deviceId
-
-    } = req.params;
-
+const {
+deviceId
+}=req.params;
 
 
 
-    const device =
+const device =
 
-      await DeviceSession.findOneAndUpdate(
+await DeviceSession.findOneAndUpdate(
 
-        {
+{
 
-          user:req.user._id,
+user:req.user._id,
 
-          deviceId
+deviceId
 
-        },
+},
 
+{
 
-        {
+$set:{
 
-          $set:{
-
-            trusted:false
-
-          }
-
-        },
-
-
-        {
-
-          returnDocument:'after'
-
-        }
-
-      );
-
-
-
-
-
-    if(!device){
-
-      return res.status(404).json({
-
-        success:false,
-
-        message:
-          'Device not found'
-
-      });
-
-    }
-
-
-
-
-    res.json({
-
-      success:true,
-
-      message:
-        'Device untrusted',
-
-      device
-
-    });
-
-
-
-  }catch(error){
-
-    next(error);
-
-  }
+trusted:false
 
 }
+
+},
+
+{
+
+returnDocument:'after'
+
+}
+
+);
+
+
+
+if(!device){
+
+return res.status(404).json({
+
+success:false,
+
+message:
+'Device not found'
+
+});
+
+}
+
+
+
+res.json({
+
+success:true,
+
+message:
+'Device untrusted successfully',
+
+device
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
 
 
 
@@ -560,51 +402,407 @@ LOGOUT ALL DEVICES
 
 async function logoutAllDevices(req,res,next){
 
-  try{
+try{
 
 
-    await DeviceSession.updateMany(
+await DeviceSession.updateMany(
 
-      {
+{
 
-        user:req.user._id
+user:req.user._id
 
-      },
+},
 
+{
 
-      {
+$set:{
 
-        $set:{
-
-          trusted:false
-
-        }
-
-      }
-
-    );
-
-
-
-
-    res.json({
-
-      success:true,
-
-      message:
-        'All devices have been logged out'
-
-    });
-
-
-
-  }catch(error){
-
-    next(error);
-
-  }
+trusted:false
 
 }
+
+}
+
+);
+
+
+
+await SecurityAlert.create({
+
+user:req.user._id,
+
+type:'LOGOUT_ALL',
+
+message:
+'All devices were logged out',
+
+severity:'HIGH'
+
+});
+
+
+
+res.json({
+
+success:true,
+
+message:
+'All devices logged out successfully'
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+GET SECURITY ALERTS
+=========================================================
+*/
+
+async function getSecurityAlerts(req,res,next){
+
+try{
+
+
+const alerts =
+
+await SecurityAlert.find({
+
+user:req.user._id
+
+})
+
+.sort({
+
+createdAt:-1
+
+})
+
+.limit(50)
+
+.select(
+
+'type severity message deviceId deviceName platform ipAddress read resolved createdAt'
+
+);
+
+
+
+res.json({
+
+success:true,
+
+alerts
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+GET UNREAD ALERT COUNT
+=========================================================
+*/
+
+async function getUnreadAlertCount(req,res,next){
+
+try{
+
+
+const count =
+
+await SecurityAlert.countDocuments({
+
+user:req.user._id,
+
+read:false
+
+});
+
+
+
+res.json({
+
+success:true,
+
+count
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+MARK ALERT READ
+=========================================================
+*/
+
+async function markAlertRead(req,res,next){
+
+try{
+
+
+const alert =
+
+await SecurityAlert.findOneAndUpdate(
+
+{
+
+_id:req.params.id,
+
+user:req.user._id
+
+},
+
+{
+
+$set:{
+
+read:true
+
+}
+
+},
+
+{
+
+returnDocument:'after'
+
+}
+
+);
+
+
+
+if(!alert){
+
+return res.status(404).json({
+
+success:false,
+
+message:
+'Alert not found'
+
+});
+
+}
+
+
+
+res.json({
+
+success:true,
+
+alert
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+MARK ALL ALERTS READ
+=========================================================
+*/
+
+async function markAllAlertsRead(req,res,next){
+
+try{
+
+
+await SecurityAlert.updateMany(
+
+{
+
+user:req.user._id,
+
+read:false
+
+},
+
+{
+
+$set:{
+
+read:true
+
+}
+
+}
+
+);
+
+
+
+res.json({
+
+success:true,
+
+message:
+'All security alerts marked as read'
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+RESOLVE ALERT
+=========================================================
+*/
+
+async function resolveAlert(req,res,next){
+
+try{
+
+
+const alert =
+
+await SecurityAlert.findOneAndUpdate(
+
+{
+
+_id:req.params.id,
+
+user:req.user._id
+
+},
+
+{
+
+$set:{
+
+resolved:true
+
+}
+
+},
+
+{
+
+returnDocument:'after'
+
+}
+
+);
+
+
+
+if(!alert){
+
+return res.status(404).json({
+
+success:false,
+
+message:
+'Alert not found'
+
+});
+
+}
+
+
+
+res.json({
+
+success:true,
+
+alert
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+
 
 
 
@@ -614,21 +812,29 @@ async function logoutAllDevices(req,res,next){
 module.exports = {
 
 
-  getDevices,
+getDevices,
 
-  removeDevice,
+removeDevice,
 
-  trustDevice,
+trustDevice,
 
-  untrustDevice,
+untrustDevice,
 
-  logoutAllDevices,
+logoutAllDevices,
 
-  getLoginHistory,
 
-  getAlerts,
+getLoginHistory,
 
-  resolveAlert
+
+getSecurityAlerts,
+
+getUnreadAlertCount,
+
+markAlertRead,
+
+markAllAlertsRead,
+
+resolveAlert
 
 
 };
