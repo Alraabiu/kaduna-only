@@ -1,28 +1,38 @@
 const bcrypt = require('bcryptjs');
 
-const User = require('../models/User');
+const User =
+require('../models/User');
 
-const DriverProfile = require('../models/DriverProfile');
+const DriverProfile =
+require('../models/DriverProfile');
 
-const Wallet = require('../models/Wallet');
+const Wallet =
+require('../models/Wallet');
 
-const signToken = require('../utils/jwt');
+const signToken =
+require('../utils/jwt');
 
 
 const {
   registerOrUpdateDevice
-} = require('../services/deviceSecurityService');
+}
+=
+require('../services/deviceSecurityService');
 
 
 const {
   recordLogin
-} = require('../services/loginHistoryService');
+}
+=
+require('../services/loginHistoryService');
+
 
 const {
- createAlert
+  createAlert
 }
 =
 require('../services/securityAlertService');
+
 
 
 
@@ -46,6 +56,8 @@ const publicUser = u => ({
 
 
 
+
+
 /*
 =========================================================
 REGISTER
@@ -54,7 +66,6 @@ REGISTER
 
 
 async function register(req,res,next){
-
 
 try{
 
@@ -82,7 +93,6 @@ if(
 !password
 ){
 
-
 return res.status(400).json({
 
 success:false,
@@ -92,9 +102,7 @@ message:
 
 });
 
-
 }
-
 
 
 
@@ -102,7 +110,6 @@ message:
 if(
 !['rider','driver'].includes(role)
 ){
-
 
 return res.status(400).json({
 
@@ -113,9 +120,7 @@ message:
 
 });
 
-
 }
-
 
 
 
@@ -123,7 +128,6 @@ message:
 if(
 password.length < 8
 ){
-
 
 return res.status(400).json({
 
@@ -134,14 +138,12 @@ message:
 
 });
 
-
 }
 
 
 
 
 const exists =
-
 await User.findOne({
 
 $or:[
@@ -170,7 +172,6 @@ email.toLowerCase()
 
 if(exists){
 
-
 return res.status(409).json({
 
 success:false,
@@ -180,29 +181,21 @@ message:
 
 });
 
-
 }
 
 
 
 
-
 const passwordHash =
-
 await bcrypt.hash(
-
 password,
-
 12
-
 );
 
 
 
 
-
 const user =
-
 await User.create({
 
 fullName,
@@ -220,7 +213,6 @@ role
 
 
 
-
 await Wallet.create({
 
 user:user._id
@@ -230,11 +222,7 @@ user:user._id
 
 
 
-
-if(
-role === 'driver'
-){
-
+if(role === 'driver'){
 
 await DriverProfile.create({
 
@@ -242,9 +230,7 @@ user:user._id
 
 });
 
-
 }
-
 
 
 
@@ -270,16 +256,14 @@ signToken(user)
 
 
 
-
-
 }catch(error){
 
 next(error);
 
 }
 
-
 }
+
 
 
 
@@ -291,13 +275,12 @@ next(error);
 /*
 =========================================================
 LOGIN
-DEVICE SECURITY + LOGIN HISTORY
+DEVICE SECURITY + ALERTS + LOGIN HISTORY
 =========================================================
 */
 
 
 async function login(req,res,next){
-
 
 try{
 
@@ -319,12 +302,10 @@ platform
 
 
 
-
 if(
 !phone ||
 !password
 ){
-
 
 return res.status(400).json({
 
@@ -335,23 +316,18 @@ message:
 
 });
 
-
 }
 
 
 
 
-
 const u =
-
 await User.findOne({
 
 phone
 
 })
-
 .select('+passwordHash');
-
 
 
 
@@ -370,8 +346,6 @@ u.passwordHash
 
 ){
 
-
-
 return res.status(401).json({
 
 success:false,
@@ -381,9 +355,7 @@ message:
 
 });
 
-
 }
-
 
 
 
@@ -391,7 +363,6 @@ message:
 if(
 u.status !== 'active'
 ){
-
 
 return res.status(403).json({
 
@@ -402,7 +373,6 @@ message:
 
 });
 
-
 }
 
 
@@ -410,29 +380,11 @@ message:
 
 
 
-
-/*
-=========================================================
-CREATE DEVICE ID
-
-Priority:
-
-1. Mobile app device ID
-2. Browser supplied ID
-3. Generated browser ID
-
-=========================================================
-*/
-
-
 const currentDeviceId =
-
 
 deviceId ||
 
-
 req.headers['x-device-id'] ||
-
 
 `browser-${
 
@@ -451,7 +403,6 @@ Buffer
 .slice(0,32)
 
 }`;
-
 
 
 
@@ -482,9 +433,11 @@ req.headers['x-platform'] ||
 
 
 
+
+
 /*
 =========================================================
-SAVE DEVICE SESSION
+DEVICE REGISTRATION
 =========================================================
 */
 
@@ -493,96 +446,21 @@ const deviceResult =
 
 await registerOrUpdateDevice({
 
-  userId: u._id,
+userId:u._id,
 
-  deviceId: currentDeviceId,
+deviceId:currentDeviceId,
 
-  deviceName:
-    deviceName ||
-    req.headers['x-device-name'] ||
-    'Web Browser',
+deviceName:finalDeviceName,
 
-  platform:
-    platform ||
-    req.headers['x-platform'] ||
-    'web',
+platform:finalPlatform,
 
-  ipAddress:
-    req.ip,
+ipAddress:req.ip,
 
-  userAgent:
-    req.headers['user-agent']
+userAgent:req.headers['user-agent']
 
 });
 
 
-
-/*
-====================================================
-SECURITY ALERT CHECK
-====================================================
-*/
-
-
-if(deviceResult.isNew){
-
-
-  await createAlert({
-
-    userId:u._id,
-
-    type:'NEW_DEVICE',
-
-    message:
-    'New device login detected',
-
-    deviceId:
-      deviceResult.deviceId,
-
-    ipAddress:
-      req.ip,
-
-    userAgent:
-      req.headers['user-agent']
-
-  });
-
-
-}
-
-
-
-if(
-
-  deviceResult.previousIp &&
-
-  deviceResult.previousIp !== req.ip
-
-){
-
-
-  await createAlert({
-
-    userId:u._id,
-
-    type:'NEW_IP',
-
-    message:
-    'Login detected from a new IP address',
-
-    deviceId:
-      deviceResult.deviceId,
-
-    ipAddress:
-      req.ip,
-
-    userAgent:
-      req.headers['user-agent']
-
-  });
-
-
-}
 
 
 
@@ -590,35 +468,119 @@ if(
 
 /*
 =========================================================
-SAVE LOGIN HISTORY
+SECURITY ALERTS
+=========================================================
+*/
+
+
+if(deviceResult.isNewDevice){
+
+
+const alert =
+
+await createAlert({
+
+userId:u._id,
+
+type:'NEW_DEVICE',
+
+message:
+'Login detected from a new device',
+
+deviceId:
+deviceResult.deviceId,
+
+ipAddress:
+req.ip,
+
+userAgent:
+req.headers['user-agent']
+
+});
+
+
+console.log(
+
+'[SECURITY ALERT CREATED]',
+
+{
+
+id:String(alert._id),
+
+type:alert.type
+
+}
+
+);
+
+
+}
+
+
+
+
+
+if(
+
+deviceResult.device &&
+
+deviceResult.device.ipAddress &&
+
+deviceResult.device.ipAddress !== req.ip
+
+){
+
+
+await createAlert({
+
+userId:u._id,
+
+type:'NEW_IP',
+
+message:
+'Login detected from a new IP address',
+
+deviceId:
+deviceResult.deviceId,
+
+ipAddress:req.ip,
+
+userAgent:req.headers['user-agent']
+
+});
+
+
+}
+
+
+
+
+
+
+
+
+/*
+=========================================================
+LOGIN HISTORY
 =========================================================
 */
 
 
 await recordLogin({
 
-  userId:u._id,
+userId:u._id,
 
-  deviceId:currentDeviceId,
+deviceId:currentDeviceId,
 
-  deviceName:
-    deviceName ||
-    req.headers['x-device-name'] ||
-    'Web Browser',
+deviceName:finalDeviceName,
 
-  platform:
-    platform ||
-    req.headers['x-platform'] ||
-    'web',
+platform:finalPlatform,
 
-  ipAddress:
-    req.ip,
+ipAddress:req.ip,
 
-  userAgent:
-    req.headers['user-agent']
+userAgent:req.headers['user-agent']
 
 });
-
 
 
 
@@ -647,16 +609,14 @@ signToken(u)
 
 
 
-
-
 }catch(error){
 
 next(error);
 
 }
 
-
 }
+
 
 
 
@@ -674,7 +634,6 @@ CURRENT USER
 
 async function me(req,res){
 
-
 res.json({
 
 success:true,
@@ -688,21 +647,20 @@ publicUser(req.user)
 
 });
 
-
 }
 
 
 
 
 
-module.exports={
 
+
+module.exports = {
 
 register,
 
 login,
 
 me
-
 
 };
