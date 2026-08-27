@@ -231,27 +231,84 @@ const server =
   http.createServer(app);
 
 const io =
-  new Server(server, {
-    cors: {
-      origin: true,
-      credentials: true,
-      methods: [
-        'GET',
-        'POST',
-        'PUT',
-        'PATCH',
-        'DELETE',
-        'OPTIONS'
-      ]
-    },
 
-    transports: [
-      'websocket',
-      'polling'
-    ],
+  new Server(
 
-    allowEIO3: true
-  });
+    server,
+
+    {
+
+      cors: {
+
+        origin: true,
+
+        credentials: true,
+
+        methods: [
+
+          'GET',
+
+          'POST',
+
+          'PUT',
+
+          'PATCH',
+
+          'DELETE',
+
+          'OPTIONS'
+
+        ]
+
+      },
+
+
+      transports: [
+
+        'websocket',
+
+        'polling'
+
+      ],
+
+
+      allowEIO3:true
+
+    }
+
+);
+
+
+
+
+
+/*
+=========================================================
+MAKE SOCKET.IO AVAILABLE GLOBALLY
+=========================================================
+Used by:
+
+- Security alerts
+- Wallet notifications
+- Trip updates
+- Realtime events
+
+=========================================================
+*/
+
+
+global.io = io;
+
+
+/*
+=========================================================
+REALTIME SERVICE CONNECTION
+=========================================================
+Keeps existing realtime abstraction working
+
+=========================================================
+*/
+
 
 setIO(io);
 

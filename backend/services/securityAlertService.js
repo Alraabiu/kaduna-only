@@ -29,9 +29,9 @@ async function createAlert({
 
   userAgent,
 
-  severity = 'MEDIUM',
+  severity='MEDIUM',
 
-  metadata = {}
+  metadata={}
 
 }){
 
@@ -46,40 +46,35 @@ async function createAlert({
 
 
 
-  if(!type){
+  const alert =
 
-    throw new Error(
-      'Alert type is required'
-    );
+    await SecurityAlert.create({
 
-  }
+      user:userId,
+
+      type,
+
+      message,
+
+      deviceId,
+
+      deviceName,
+
+      platform,
+
+      ipAddress,
+
+      userAgent,
+
+      severity,
+
+      metadata
+
+    });
 
 
 
-
-  return SecurityAlert.create({
-
-    user:userId,
-
-    type,
-
-    message,
-
-    deviceId,
-
-    deviceName,
-
-    platform,
-
-    ipAddress,
-
-    userAgent,
-
-    severity,
-
-    metadata
-
-  });
+  return alert;
 
 
 }
@@ -90,10 +85,9 @@ async function createAlert({
 
 
 
-
 /*
 =========================================================
-CHECK RECENT DUPLICATE ALERT
+CHECK DUPLICATE ALERT
 =========================================================
 */
 
@@ -108,7 +102,7 @@ async function hasRecentAlert({
 
   ipAddress,
 
-  minutes = 30
+  minutes=30
 
 }){
 
@@ -126,7 +120,6 @@ async function hasRecentAlert({
       1000
 
     );
-
 
 
 
@@ -174,9 +167,7 @@ async function hasRecentAlert({
 
   return Boolean(
 
-    await SecurityAlert.exists(
-      query
-    )
+    await SecurityAlert.exists(query)
 
   );
 
@@ -193,13 +184,80 @@ async function hasRecentAlert({
 
 /*
 =========================================================
-CREATE ALERT IF NOT EXISTS
+REALTIME SECURITY EMIT
+=========================================================
+*/
+
+
+function emitSecurityAlert({
+
+  userId,
+
+  alert
+
+}){
+
+
+  const io =
+
+    global.io;
+
+
+
+  if(!io){
+
+    console.log(
+      '[SECURITY SOCKET] IO unavailable'
+    );
+
+    return;
+
+  }
+
+
+
+
+
+  io.to(
+
+    `security:${userId}`
+
+  )
+
+  .emit(
+
+    'security_alert',
+
+    {
+
+      success:true,
+
+      alert
+
+    }
+
+  );
+
+
+
+}
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+CREATE UNIQUE ALERT + REALTIME
 =========================================================
 */
 
 
 async function createUniqueAlert(payload){
-
 
 
 
@@ -210,11 +268,14 @@ async function createUniqueAlert(payload){
       userId:
         payload.userId,
 
+
       type:
         payload.type,
 
+
       deviceId:
         payload.deviceId,
+
 
       ipAddress:
         payload.ipAddress
@@ -235,7 +296,29 @@ async function createUniqueAlert(payload){
 
 
 
-  return createAlert(payload);
+  const alert =
+
+    await createAlert(payload);
+
+
+
+
+
+  emitSecurityAlert({
+
+    userId:
+      payload.userId,
+
+    alert
+
+  });
+
+
+
+
+
+  return alert;
+
 
 }
 
@@ -249,7 +332,7 @@ async function createUniqueAlert(payload){
 
 /*
 =========================================================
-GET UNREAD ALERT COUNT
+UNREAD COUNT
 =========================================================
 */
 
@@ -278,7 +361,7 @@ async function getUnreadCount(userId){
 
 /*
 =========================================================
-MARK ALL ALERTS READ
+MARK ALL READ
 =========================================================
 */
 
@@ -295,6 +378,7 @@ async function markAllRead(userId){
       read:false
 
     },
+
 
     {
 
@@ -321,7 +405,7 @@ async function markAllRead(userId){
 
 /*
 =========================================================
-RESOLVE ALL ALERTS
+RESOLVE ALERTS
 =========================================================
 */
 
@@ -338,6 +422,7 @@ async function resolveAll(userId){
       resolved:false
 
     },
+
 
     {
 
@@ -361,26 +446,22 @@ async function resolveAll(userId){
 
 
 
-
 module.exports = {
 
 
-  createAlert,
+createAlert,
 
+createUniqueAlert,
 
-  createUniqueAlert,
+hasRecentAlert,
 
+emitSecurityAlert,
 
-  hasRecentAlert,
+getUnreadCount,
 
+markAllRead,
 
-  getUnreadCount,
-
-
-  markAllRead,
-
-
-  resolveAll
+resolveAll
 
 
 };

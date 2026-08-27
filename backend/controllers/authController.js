@@ -6,6 +6,8 @@ const DriverProfile = require('../models/DriverProfile');
 
 const Wallet = require('../models/Wallet');
 
+const DeviceSession = require('../models/DeviceSession');
+
 const signToken = require('../utils/jwt');
 
 
@@ -24,24 +26,99 @@ const {
 } = require('../services/securityAlertService');
 
 
+const {
+  createSession
+} = require('../services/sessionService');
 
 
-const publicUser = u => ({
 
-  id:u._id,
 
-  fullName:u.fullName,
+const publicUser = user => ({
 
-  phone:u.phone,
+  id:user._id,
 
-  email:u.email,
+  fullName:user.fullName,
 
-  role:u.role,
+  phone:user.phone,
 
-  status:u.status
+  email:user.email,
+
+  role:user.role,
+
+  status:user.status
 
 });
 
+
+
+
+
+
+function generateBrowserDeviceId(req){
+
+return `browser-${
+Buffer
+.from(
+`${req.ip}-${req.headers['user-agent'] || 'unknown'}`
+)
+.toString('base64')
+.replace(/[^a-zA-Z0-9]/g,'')
+.slice(0,32)
+}`;
+
+}
+
+
+
+
+
+
+
+async function createUserSession({
+
+user,
+
+jwtResult,
+
+deviceId,
+
+req
+
+}){
+
+
+return createSession({
+
+userId:user._id,
+
+tokenId:jwtResult.tokenId,
+
+deviceId,
+
+ipAddress:req.ip,
+
+userAgent:req.headers['user-agent'],
+
+expiresAt:new Date(
+
+Date.now() +
+
+7 *
+
+24 *
+
+60 *
+
+60 *
+
+1000
+
+)
+
+});
+
+
+}
 
 
 
@@ -59,7 +136,6 @@ REGISTER
 
 async function register(req,res,next){
 
-
 try{
 
 
@@ -76,7 +152,6 @@ password,
 role='rider'
 
 }=req.body || {};
-
 
 
 
@@ -101,7 +176,6 @@ message:
 
 
 
-
 if(
 !['rider','driver'].includes(role)
 ){
@@ -120,10 +194,7 @@ message:
 
 
 
-
-if(
-password.length < 8
-){
+if(password.length < 8){
 
 return res.status(400).json({
 
@@ -139,20 +210,34 @@ message:
 
 
 
+const cleanPhone =
+phone.trim();
 
-const exists = await User.findOne({
+
+const cleanEmail =
+email
+?
+email.toLowerCase().trim()
+:
+undefined;
+
+
+
+
+const exists =
+await User.findOne({
 
 $or:[
 
 {
-phone
+phone:cleanPhone
 },
 
-...(email
+...(cleanEmail
 ?
 [
 {
-email:email.toLowerCase()
+email:cleanEmail
 }
 ]
 :
@@ -203,9 +288,9 @@ await User.create({
 
 fullName,
 
-phone,
+phone:cleanPhone,
 
-email,
+email:cleanEmail,
 
 passwordHash,
 
@@ -229,15 +314,20 @@ user:user._id
 
 if(role === 'driver'){
 
-
 await DriverProfile.create({
 
 user:user._id
 
 });
 
-
 }
+
+
+
+
+
+const jwtResult =
+signToken(user);
 
 
 
@@ -256,13 +346,11 @@ user:
 publicUser(user),
 
 token:
-signToken(user)
+jwtResult.token
 
 }
 
 });
-
-
 
 
 
@@ -272,47 +360,8 @@ next(error);
 
 }
 
-
 }
 
-
-
-
-
-
-
-
-
-/*
-=========================================================
-CREATE DEVICE ID
-=========================================================
-*/
-
-
-function generateBrowserDeviceId(req){
-
-
-return `browser-${
-
-Buffer
-
-.from(
-
-`${req.ip}-${req.headers['user-agent']}`
-
-)
-
-.toString('base64')
-
-.replace(/[^a-zA-Z0-9]/g,'')
-
-.slice(0,32)
-
-}`;
-
-
-}
 
 
 
@@ -325,15 +374,11 @@ Buffer
 /*
 =========================================================
 LOGIN
-DEVICE SECURITY
-LOGIN HISTORY
-SECURITY ALERTS
 =========================================================
 */
 
 
 async function login(req,res,next){
-
 
 try{
 
@@ -351,7 +396,6 @@ deviceName,
 platform
 
 }=req.body || {};
-
 
 
 
@@ -375,12 +419,11 @@ message:
 
 
 
-
 const user =
 
 await User.findOne({
 
-phone
+phone:phone.trim()
 
 })
 
@@ -390,11 +433,7 @@ phone
 
 
 
-
-
-if(
-!user
-){
+if(!user){
 
 return res.status(401).json({
 
@@ -406,7 +445,6 @@ message:
 });
 
 }
-
 
 
 
@@ -457,18 +495,13 @@ message:
 
 });
 
-
 }
 
 
 
 
 
-
-
-if(
-user.status !== 'active'
-){
+if(user.status !== 'active'){
 
 return res.status(403).json({
 
@@ -480,10 +513,6 @@ message:
 });
 
 }
-
-
-
-
 
 
 
@@ -501,7 +530,6 @@ generateBrowserDeviceId(req);
 
 
 
-
 const finalDeviceName =
 
 deviceName ||
@@ -509,7 +537,6 @@ deviceName ||
 req.headers['x-device-name'] ||
 
 'Web Browser';
-
 
 
 
@@ -527,14 +554,9 @@ req.headers['x-platform'] ||
 
 
 
-
-
-
 const existingDevice =
 
-await require('../models/DeviceSession')
-
-.findOne({
+await DeviceSession.findOne({
 
 user:user._id,
 
@@ -546,11 +568,8 @@ deviceId:currentDeviceId
 
 
 
-
 const previousIp =
-
 existingDevice?.ipAddress;
-
 
 
 
@@ -571,8 +590,6 @@ ipAddress:req.ip,
 userAgent:req.headers['user-agent']
 
 });
-
-
 
 
 
@@ -603,7 +620,6 @@ severity:'HIGH'
 
 
 }
-
 
 
 
@@ -645,9 +661,6 @@ severity:'MEDIUM'
 
 
 
-
-
-
 await recordLogin({
 
 userId:user._id,
@@ -672,6 +685,30 @@ status:'success'
 
 
 
+const jwtResult =
+signToken(user);
+
+
+
+
+
+await createUserSession({
+
+user,
+
+jwtResult,
+
+deviceId:currentDeviceId,
+
+req
+
+});
+
+
+
+
+
+
 
 res.json({
 
@@ -686,12 +723,11 @@ user:
 publicUser(user),
 
 token:
-signToken(user)
+jwtResult.token
 
 }
 
 });
-
 
 
 
@@ -702,7 +738,6 @@ next(error);
 
 }
 
-
 }
 
 
@@ -712,16 +747,7 @@ next(error);
 
 
 
-
-/*
-=========================================================
-CURRENT USER
-=========================================================
-*/
-
-
 async function me(req,res){
-
 
 res.json({
 
@@ -736,11 +762,7 @@ publicUser(req.user)
 
 });
 
-
 }
-
-
-
 
 
 
@@ -749,12 +771,10 @@ publicUser(req.user)
 
 module.exports = {
 
-
 register,
 
 login,
 
 me
-
 
 };

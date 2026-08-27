@@ -10,12 +10,19 @@ const SecurityAlert =
 require('../models/SecurityAlert');
 
 
+const {
+  createUniqueAlert
+}
+=
+require('../services/securityAlertService');
+
+
 
 
 
 /*
 =========================================================
-GET LOGIN HISTORY
+LOGIN HISTORY
 =========================================================
 */
 
@@ -38,13 +45,7 @@ createdAt:-1
 
 })
 
-.limit(50)
-
-.select(
-
-'deviceId deviceName platform ipAddress status createdAt userAgent'
-
-);
+.limit(50);
 
 
 
@@ -55,7 +56,6 @@ success:true,
 history
 
 });
-
 
 
 }catch(error){
@@ -72,11 +72,9 @@ next(error);
 
 
 
-
-
 /*
 =========================================================
-GET USER DEVICES
+GET DEVICES
 =========================================================
 */
 
@@ -116,7 +114,6 @@ devices
 });
 
 
-
 }catch(error){
 
 next(error);
@@ -124,7 +121,6 @@ next(error);
 }
 
 }
-
 
 
 
@@ -144,22 +140,15 @@ async function removeDevice(req,res,next){
 try{
 
 
-const {
-deviceId
-}=req.params;
-
-
-
 const device =
 
 await DeviceSession.findOneAndDelete({
 
 user:req.user._id,
 
-deviceId
+deviceId:req.params.deviceId
 
 });
-
 
 
 
@@ -175,7 +164,6 @@ message:
 });
 
 }
-
 
 
 
@@ -205,7 +193,6 @@ next(error);
 
 
 
-
 /*
 =========================================================
 TRUST DEVICE
@@ -217,12 +204,6 @@ async function trustDevice(req,res,next){
 try{
 
 
-const {
-deviceId
-}=req.params;
-
-
-
 const device =
 
 await DeviceSession.findOneAndUpdate(
@@ -231,7 +212,7 @@ await DeviceSession.findOneAndUpdate(
 
 user:req.user._id,
 
-deviceId
+deviceId:req.params.deviceId
 
 },
 
@@ -276,9 +257,6 @@ res.json({
 
 success:true,
 
-message:
-'Device trusted successfully',
-
 device
 
 });
@@ -300,7 +278,6 @@ next(error);
 
 
 
-
 /*
 =========================================================
 UNTRUST DEVICE
@@ -312,12 +289,6 @@ async function untrustDevice(req,res,next){
 try{
 
 
-const {
-deviceId
-}=req.params;
-
-
-
 const device =
 
 await DeviceSession.findOneAndUpdate(
@@ -326,7 +297,7 @@ await DeviceSession.findOneAndUpdate(
 
 user:req.user._id,
 
-deviceId
+deviceId:req.params.deviceId
 
 },
 
@@ -369,9 +340,6 @@ res.json({
 
 success:true,
 
-message:
-'Device untrusted successfully',
-
 device
 
 });
@@ -385,7 +353,6 @@ next(error);
 }
 
 }
-
 
 
 
@@ -427,18 +394,21 @@ trusted:false
 
 
 
-await SecurityAlert.create({
+await createUniqueAlert({
 
-user:req.user._id,
+userId:req.user._id,
 
-type:'LOGOUT_ALL',
+type:'SUSPICIOUS_LOGIN',
 
 message:
 'All devices were logged out',
 
-severity:'HIGH'
+ipAddress:req.ip,
+
+userAgent:req.headers['user-agent']
 
 });
+
 
 
 
@@ -460,7 +430,6 @@ next(error);
 }
 
 }
-
 
 
 
@@ -494,13 +463,7 @@ createdAt:-1
 
 })
 
-.limit(50)
-
-.select(
-
-'type severity message deviceId deviceName platform ipAddress read resolved createdAt'
-
-);
+.limit(100);
 
 
 
@@ -529,10 +492,9 @@ next(error);
 
 
 
-
 /*
 =========================================================
-GET UNREAD ALERT COUNT
+GET ALERT COUNT
 =========================================================
 */
 
@@ -547,7 +509,7 @@ await SecurityAlert.countDocuments({
 
 user:req.user._id,
 
-read:false
+resolved:false
 
 });
 
@@ -578,7 +540,6 @@ next(error);
 
 
 
-
 /*
 =========================================================
 MARK ALERT READ
@@ -586,152 +547,6 @@ MARK ALERT READ
 */
 
 async function markAlertRead(req,res,next){
-
-try{
-
-
-const alert =
-
-await SecurityAlert.findOneAndUpdate(
-
-{
-
-_id:req.params.id,
-
-user:req.user._id
-
-},
-
-{
-
-$set:{
-
-read:true
-
-}
-
-},
-
-{
-
-returnDocument:'after'
-
-}
-
-);
-
-
-
-if(!alert){
-
-return res.status(404).json({
-
-success:false,
-
-message:
-'Alert not found'
-
-});
-
-}
-
-
-
-res.json({
-
-success:true,
-
-alert
-
-});
-
-
-
-}catch(error){
-
-next(error);
-
-}
-
-}
-
-
-
-
-
-
-
-
-
-/*
-=========================================================
-MARK ALL ALERTS READ
-=========================================================
-*/
-
-async function markAllAlertsRead(req,res,next){
-
-try{
-
-
-await SecurityAlert.updateMany(
-
-{
-
-user:req.user._id,
-
-read:false
-
-},
-
-{
-
-$set:{
-
-read:true
-
-}
-
-}
-
-);
-
-
-
-res.json({
-
-success:true,
-
-message:
-'All security alerts marked as read'
-
-});
-
-
-
-}catch(error){
-
-next(error);
-
-}
-
-}
-
-
-
-
-
-
-
-
-
-/*
-=========================================================
-RESOLVE ALERT
-=========================================================
-*/
-
-async function resolveAlert(req,res,next){
 
 try{
 
@@ -801,94 +616,6 @@ next(error);
 
 }
 
-/*
-=========================================================
-GET SECURITY ALERTS
-=========================================================
-*/
-
-async function getSecurityAlerts(req,res,next){
-
-try{
-
-
-const alerts =
-
-await SecurityAlert.find({
-
-user:req.user._id
-
-})
-
-.sort({
-
-createdAt:-1
-
-})
-
-.limit(100);
-
-
-
-res.json({
-
-success:true,
-
-alerts
-
-});
-
-
-
-}catch(error){
-
-next(error);
-
-}
-
-}
-
-
-/*
-=========================================================
-GET UNREAD ALERT COUNT
-=========================================================
-*/
-
-async function getUnreadAlertCount(req,res,next){
-
-try{
-
-
-const count =
-
-await SecurityAlert.countDocuments({
-
-user:req.user._id,
-
-read:false
-
-});
-
-
-
-res.json({
-
-success:true,
-
-count
-
-});
-
-
-
-}catch(error){
-
-next(error);
-
-}
-
-}
 
 
 
@@ -898,83 +625,7 @@ next(error);
 
 /*
 =========================================================
-MARK SINGLE ALERT READ
-=========================================================
-*/
-
-async function markAlertRead(req,res,next){
-
-try{
-
-
-const alert =
-
-await SecurityAlert.findOneAndUpdate(
-
-{
-
-_id:req.params.id,
-
-user:req.user._id
-
-},
-
-{
-
-$set:{
-
-read:true
-
-}
-
-},
-
-{
-
-returnDocument:'after'
-
-}
-
-);
-
-
-
-if(!alert){
-
-return res.status(404).json({
-
-success:false,
-
-message:
-'Alert not found'
-
-});
-
-}
-
-
-
-res.json({
-
-success:true,
-
-alert
-
-});
-
-
-
-}catch(error){
-
-next(error);
-
-}
-
-}
-
-/*
-=========================================================
-MARK ALL ALERTS READ
+MARK ALL READ
 =========================================================
 */
 
@@ -989,7 +640,7 @@ await SecurityAlert.updateMany(
 
 user:req.user._id,
 
-read:false
+resolved:false
 
 },
 
@@ -997,7 +648,7 @@ read:false
 
 $set:{
 
-read:true
+resolved:true
 
 }
 
@@ -1012,7 +663,7 @@ res.json({
 success:true,
 
 message:
-'All alerts marked as read'
+'All security alerts resolved'
 
 });
 
@@ -1025,6 +676,13 @@ next(error);
 }
 
 }
+
+
+
+
+
+
+
 
 /*
 =========================================================
@@ -1106,7 +764,14 @@ next(error);
 }
 
 
-module.exports = {
+
+
+
+
+
+
+module.exports={
+
 
 getDevices,
 
@@ -1129,5 +794,6 @@ markAlertRead,
 markAllAlertsRead,
 
 resolveAlert
+
 
 };
