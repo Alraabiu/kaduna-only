@@ -2,13 +2,9 @@ const jwt = require('jsonwebtoken');
 
 const User = require('../models/User');
 
-const UserSession =
-require('../models/UserSession');
-
-const DeviceSession =
-require('../models/DeviceSession');
-
-
+const {
+  getActiveSession
+} = require('../services/sessionService');
 
 
 
@@ -16,12 +12,21 @@ require('../models/DeviceSession');
 =========================================================
 AUTHENTICATION MIDDLEWARE
 
-Checks:
+Flow:
 
-1. JWT validity
-2. User account status
-3. Active session
-4. Device security status
+Bearer Token
+      |
+      |
+JWT Verify
+      |
+      |
+Check UserSession
+      |
+      |
+Check User
+      |
+      |
+Attach req.user
 
 =========================================================
 */
@@ -42,9 +47,11 @@ const token =
 header.startsWith('Bearer ')
 
 ?
+
 header.slice(7)
 
 :
+
 null;
 
 
@@ -80,24 +87,30 @@ process.env.JWT_SECRET
 
 
 
-/*
-=========================================================
-CHECK SESSION
+if(!payload.tokenId){
 
-=========================================================
-*/
+return res.status(401).json({
+
+success:false,
+
+message:
+'Invalid session token'
+
+});
+
+}
+
+
+
 
 
 const session =
 
-await UserSession.findOne({
+await getActiveSession(
 
-tokenId:
-payload.tokenId,
+payload.tokenId
 
-revoked:false
-
-});
+);
 
 
 
@@ -110,7 +123,7 @@ return res.status(401).json({
 success:false,
 
 message:
-'Session expired. Please login again'
+'Session expired or revoked'
 
 });
 
@@ -120,13 +133,25 @@ message:
 
 
 
+if(
 
-/*
-=========================================================
-CHECK USER
+session.expiresAt < new Date()
 
-=========================================================
-*/
+){
+
+return res.status(401).json({
+
+success:false,
+
+message:
+'Session expired'
+
+});
+
+}
+
+
+
 
 
 const user =
@@ -141,8 +166,13 @@ payload.sub
 
 
 
-if(!user || user.status !== 'active'){
+if(
 
+!user ||
+
+user.status !== 'active'
+
+){
 
 return res.status(401).json({
 
@@ -159,77 +189,11 @@ message:
 
 
 
-
-
-
 /*
 =========================================================
-CHECK DEVICE STATUS
-
+SECURITY CONTEXT
 =========================================================
 */
-
-
-if(session.deviceId){
-
-
-const device =
-
-await DeviceSession.findOne({
-
-user:user._id,
-
-deviceId:
-session.deviceId
-
-});
-
-
-
-
-if(device && device.blocked){
-
-
-return res.status(403).json({
-
-success:false,
-
-message:
-'This device has been blocked'
-
-});
-
-
-}
-
-
-}
-
-
-
-
-
-
-
-
-/*
-=========================================================
-UPDATE SESSION ACTIVITY
-
-=========================================================
-*/
-
-
-session.lastUsedAt =
-new Date();
-
-
-await session.save();
-
-
-
-
-
 
 
 req.user = user;
@@ -238,8 +202,12 @@ req.user = user;
 req.session = session;
 
 
+req.tokenId = payload.tokenId;
+
+
 
 next();
+
 
 
 
@@ -259,8 +227,8 @@ message:
 
 }
 
-}
 
+}
 
 
 
@@ -270,15 +238,15 @@ message:
 
 /*
 =========================================================
-ROLE AUTHORIZATION
-
+ROLE CHECK
 =========================================================
 */
 
 
 function requireRole(...roles){
 
-return(
+
+return (
 
 req,
 
@@ -291,20 +259,30 @@ next
 
 if(
 
-roles.includes(
-
-req.user?.role
-
-)
+!req.user
 
 ){
 
-return next();
+return res.status(401).json({
+
+success:false,
+
+message:
+'Authentication required'
+
+});
 
 }
 
 
 
+
+
+if(
+
+!roles.includes(req.user.role)
+
+){
 
 return res.status(403).json({
 
@@ -315,10 +293,21 @@ message:
 
 });
 
+}
+
+
+
+
+
+next();
+
 
 };
 
+
 }
+
+
 
 
 
