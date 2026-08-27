@@ -30,11 +30,40 @@ const securityAlertSchema = new mongoose.Schema(
 
       'MULTIPLE_DEVICES',
 
-      'SUSPICIOUS_LOGIN'
+      'SUSPICIOUS_LOGIN',
+
+      'FAILED_LOGIN',
+
+      'PASSWORD_CHANGE',
+
+      'LOGOUT_ALL'
 
     ],
 
-    required: true
+    required: true,
+
+    index: true
+
+  },
+
+
+  severity: {
+
+    type: String,
+
+    enum: [
+
+      'LOW',
+
+      'MEDIUM',
+
+      'HIGH',
+
+      'CRITICAL'
+
+    ],
+
+    default: 'MEDIUM'
 
   },
 
@@ -55,6 +84,20 @@ const securityAlertSchema = new mongoose.Schema(
   },
 
 
+  deviceName: {
+
+    type: String
+
+  },
+
+
+  platform: {
+
+    type: String
+
+  },
+
+
   ipAddress: {
 
     type: String
@@ -69,24 +112,54 @@ const securityAlertSchema = new mongoose.Schema(
   },
 
 
+  read: {
+
+    type: Boolean,
+
+    default: false,
+
+    index: true
+
+  },
+
+
   resolved: {
 
     type: Boolean,
 
     default: false
 
+  },
+
+
+  metadata: {
+
+    type: mongoose.Schema.Types.Mixed,
+
+    default: {}
+
   }
+
 
 },
 
 {
 
-  timestamps: true
+  timestamps:true
 
 }
 
 );
 
+
+
+securityAlertSchema.index({
+
+  user:1,
+
+  createdAt:-1
+
+});
 
 
 module.exports =

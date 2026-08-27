@@ -1,37 +1,27 @@
 const bcrypt = require('bcryptjs');
 
-const User =
-require('../models/User');
+const User = require('../models/User');
 
-const DriverProfile =
-require('../models/DriverProfile');
+const DriverProfile = require('../models/DriverProfile');
 
-const Wallet =
-require('../models/Wallet');
+const Wallet = require('../models/Wallet');
 
-const signToken =
-require('../utils/jwt');
+const signToken = require('../utils/jwt');
 
 
 const {
   registerOrUpdateDevice
-}
-=
-require('../services/deviceSecurityService');
+} = require('../services/deviceSecurityService');
 
 
 const {
   recordLogin
-}
-=
-require('../services/loginHistoryService');
+} = require('../services/loginHistoryService');
 
 
 const {
-  createAlert
-}
-=
-require('../services/securityAlertService');
+  createUniqueAlert
+} = require('../services/securityAlertService');
 
 
 
@@ -58,6 +48,8 @@ const publicUser = u => ({
 
 
 
+
+
 /*
 =========================================================
 REGISTER
@@ -66,6 +58,7 @@ REGISTER
 
 
 async function register(req,res,next){
+
 
 try{
 
@@ -83,6 +76,7 @@ password,
 role='rider'
 
 }=req.body || {};
+
 
 
 
@@ -107,6 +101,7 @@ message:
 
 
 
+
 if(
 !['rider','driver'].includes(role)
 ){
@@ -121,6 +116,7 @@ message:
 });
 
 }
+
 
 
 
@@ -143,8 +139,8 @@ message:
 
 
 
-const exists =
-await User.findOne({
+
+const exists = await User.findOne({
 
 $or:[
 
@@ -156,8 +152,7 @@ phone
 ?
 [
 {
-email:
-email.toLowerCase()
+email:email.toLowerCase()
 }
 ]
 :
@@ -166,6 +161,7 @@ email.toLowerCase()
 ]
 
 });
+
 
 
 
@@ -186,16 +182,23 @@ message:
 
 
 
+
 const passwordHash =
+
 await bcrypt.hash(
+
 password,
+
 12
+
 );
 
 
 
 
+
 const user =
+
 await User.create({
 
 fullName,
@@ -213,6 +216,7 @@ role
 
 
 
+
 await Wallet.create({
 
 user:user._id
@@ -222,7 +226,9 @@ user:user._id
 
 
 
+
 if(role === 'driver'){
+
 
 await DriverProfile.create({
 
@@ -230,7 +236,9 @@ user:user._id
 
 });
 
+
 }
+
 
 
 
@@ -256,11 +264,53 @@ signToken(user)
 
 
 
+
+
 }catch(error){
 
 next(error);
 
 }
+
+
+}
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+CREATE DEVICE ID
+=========================================================
+*/
+
+
+function generateBrowserDeviceId(req){
+
+
+return `browser-${
+
+Buffer
+
+.from(
+
+`${req.ip}-${req.headers['user-agent']}`
+
+)
+
+.toString('base64')
+
+.replace(/[^a-zA-Z0-9]/g,'')
+
+.slice(0,32)
+
+}`;
+
 
 }
 
@@ -275,12 +325,15 @@ next(error);
 /*
 =========================================================
 LOGIN
-DEVICE SECURITY + ALERTS + LOGIN HISTORY
+DEVICE SECURITY
+LOGIN HISTORY
+SECURITY ALERTS
 =========================================================
 */
 
 
 async function login(req,res,next){
+
 
 try{
 
@@ -298,6 +351,7 @@ deviceName,
 platform
 
 }=req.body || {};
+
 
 
 
@@ -321,29 +375,25 @@ message:
 
 
 
-const u =
+
+const user =
+
 await User.findOne({
 
 phone
 
 })
+
 .select('+passwordHash');
 
 
 
 
+
+
+
 if(
-
-!u ||
-
-!(await bcrypt.compare(
-
-password,
-
-u.passwordHash
-
-))
-
+!user
 ){
 
 return res.status(401).json({
@@ -360,8 +410,64 @@ message:
 
 
 
+
+
+const passwordValid =
+
+await bcrypt.compare(
+
+password,
+
+user.passwordHash
+
+);
+
+
+
+
+
+if(!passwordValid){
+
+
+await createUniqueAlert({
+
+userId:user._id,
+
+type:'SUSPICIOUS_LOGIN',
+
+message:
+'Failed login attempt detected',
+
+ipAddress:req.ip,
+
+userAgent:req.headers['user-agent'],
+
+severity:'HIGH'
+
+});
+
+
+
+return res.status(401).json({
+
+success:false,
+
+message:
+'Invalid phone or password'
+
+});
+
+
+}
+
+
+
+
+
+
+
 if(
-u.status !== 'active'
+user.status !== 'active'
 ){
 
 return res.status(403).json({
@@ -380,29 +486,16 @@ message:
 
 
 
+
+
+
 const currentDeviceId =
 
 deviceId ||
 
 req.headers['x-device-id'] ||
 
-`browser-${
-
-Buffer
-
-.from(
-
-`${req.ip}-${req.headers['user-agent']}`
-
-)
-
-.toString('base64')
-
-.replace(/[^a-zA-Z0-9]/g,'')
-
-.slice(0,32)
-
-}`;
+generateBrowserDeviceId(req);
 
 
 
@@ -416,6 +509,8 @@ deviceName ||
 req.headers['x-device-name'] ||
 
 'Web Browser';
+
+
 
 
 
@@ -435,18 +530,35 @@ req.headers['x-platform'] ||
 
 
 
-/*
-=========================================================
-DEVICE REGISTRATION
-=========================================================
-*/
+const existingDevice =
+
+await require('../models/DeviceSession')
+
+.findOne({
+
+user:user._id,
+
+deviceId:currentDeviceId
+
+});
 
 
-const deviceResult =
+
+
+
+
+const previousIp =
+
+existingDevice?.ipAddress;
+
+
+
+
+
 
 await registerOrUpdateDevice({
 
-userId:u._id,
+userId:user._id,
 
 deviceId:currentDeviceId,
 
@@ -466,55 +578,32 @@ userAgent:req.headers['user-agent']
 
 
 
-/*
-=========================================================
-SECURITY ALERTS
-=========================================================
-*/
+
+if(!existingDevice){
 
 
-if(deviceResult.isNewDevice){
+await createUniqueAlert({
 
-
-const alert =
-
-await createAlert({
-
-userId:u._id,
+userId:user._id,
 
 type:'NEW_DEVICE',
 
 message:
 'Login detected from a new device',
 
-deviceId:
-deviceResult.deviceId,
+deviceId:currentDeviceId,
 
-ipAddress:
-req.ip,
+ipAddress:req.ip,
 
-userAgent:
-req.headers['user-agent']
+userAgent:req.headers['user-agent'],
+
+severity:'HIGH'
 
 });
 
 
-console.log(
-
-'[SECURITY ALERT CREATED]',
-
-{
-
-id:String(alert._id),
-
-type:alert.type
-
 }
 
-);
-
-
-}
 
 
 
@@ -522,30 +611,29 @@ type:alert.type
 
 if(
 
-deviceResult.device &&
+previousIp &&
 
-deviceResult.device.ipAddress &&
-
-deviceResult.device.ipAddress !== req.ip
+previousIp !== req.ip
 
 ){
 
 
-await createAlert({
+await createUniqueAlert({
 
-userId:u._id,
+userId:user._id,
 
 type:'NEW_IP',
 
 message:
 'Login detected from a new IP address',
 
-deviceId:
-deviceResult.deviceId,
+deviceId:currentDeviceId,
 
 ipAddress:req.ip,
 
-userAgent:req.headers['user-agent']
+userAgent:req.headers['user-agent'],
+
+severity:'MEDIUM'
 
 });
 
@@ -559,16 +647,10 @@ userAgent:req.headers['user-agent']
 
 
 
-/*
-=========================================================
-LOGIN HISTORY
-=========================================================
-*/
-
 
 await recordLogin({
 
-userId:u._id,
+userId:user._id,
 
 deviceId:currentDeviceId,
 
@@ -578,9 +660,13 @@ platform:finalPlatform,
 
 ipAddress:req.ip,
 
-userAgent:req.headers['user-agent']
+userAgent:req.headers['user-agent'],
+
+status:'success'
 
 });
+
+
 
 
 
@@ -597,14 +683,15 @@ message:
 data:{
 
 user:
-publicUser(u),
+publicUser(user),
 
 token:
-signToken(u)
+signToken(user)
 
 }
 
 });
+
 
 
 
@@ -614,6 +701,7 @@ signToken(u)
 next(error);
 
 }
+
 
 }
 
@@ -634,6 +722,7 @@ CURRENT USER
 
 async function me(req,res){
 
+
 res.json({
 
 success:true,
@@ -647,7 +736,10 @@ publicUser(req.user)
 
 });
 
+
 }
+
+
 
 
 
@@ -657,10 +749,12 @@ publicUser(req.user)
 
 module.exports = {
 
+
 register,
 
 login,
 
 me
+
 
 };

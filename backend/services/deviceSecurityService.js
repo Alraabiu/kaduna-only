@@ -1,62 +1,26 @@
 const crypto = require('crypto');
 
-const DeviceSession =
-require('../models/DeviceSession');
+const DeviceSession = require('../models/DeviceSession');
 
-
-
-/*
-=========================================================
-GENERATE DEVICE ID
-=========================================================
-*/
 
 function generateDeviceId({
-
   userAgent,
-
   ipAddress
-
 }) {
 
-
   const fingerprint =
-
-    `${userAgent || 'unknown'}-${ipAddress || 'unknown'}-${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
-
+    `${userAgent || 'unknown'}-${ipAddress || 'unknown'}-${crypto.randomBytes(16).toString('hex')}`;
 
 
   return crypto
-
     .createHash('sha256')
-
     .update(fingerprint)
-
     .digest('hex');
 
-
 }
 
 
 
-
-
-
-/*
-=========================================================
-REGISTER OR UPDATE DEVICE
-
-Returns:
-
-{
- device,
- isNew,
- previousIp,
- deviceId
-}
-
-=========================================================
-*/
 
 async function registerOrUpdateDevice({
 
@@ -75,56 +39,26 @@ async function registerOrUpdateDevice({
 }) {
 
 
-
   if(!userId){
 
     throw new Error(
-      'User ID is required'
+      'User ID required'
     );
 
   }
 
 
 
-
-
-  /*
-  =======================================================
-  DEVICE ID RESOLUTION
-  =======================================================
-  */
-
-
   const finalDeviceId =
-
     deviceId ||
-
     generateDeviceId({
-
       userAgent,
-
       ipAddress
-
     });
 
 
 
-
-
-
-
-  /*
-  =======================================================
-  CHECK EXISTING DEVICE FIRST
-
-  Required for security alerts
-
-  =======================================================
-  */
-
-
-  const existingDevice =
-
+  const existing =
     await DeviceSession.findOne({
 
       user:userId,
@@ -135,132 +69,75 @@ async function registerOrUpdateDevice({
 
 
 
+  const isNewDevice =
+    !existing;
 
-
-  const isNew =
-
-    !existingDevice;
-
-
-
-
-  const previousIp =
-
-    existingDevice?.ipAddress || null;
-
-
-
-
-
-
-
-  /*
-  =======================================================
-  CREATE OR UPDATE DEVICE
-  =======================================================
-  */
 
 
   const device =
-
     await DeviceSession.findOneAndUpdate(
 
       {
 
-
         user:userId,
 
-
         deviceId:finalDeviceId
-
 
       },
 
 
       {
 
-
         $set:{
 
-
           deviceName:
-
             deviceName ||
-
             detectDeviceName(userAgent),
 
 
-
           platform:
-
             platform ||
-
             detectPlatform(userAgent),
-
 
 
           ipAddress,
 
 
-
           userAgent,
 
 
-
           lastActiveAt:
-
             new Date()
-
 
         },
 
 
-
         $setOnInsert:{
-
 
           trusted:true
 
-
         }
-
 
       },
 
 
       {
 
-
         upsert:true,
-
 
         returnDocument:'after'
 
-
       }
-
 
     );
 
 
 
-
-
-
   return {
-
 
     device,
 
-
-    isNew,
-
-
-    previousIp,
-
-
-    deviceId:finalDeviceId
-
+    isNewDevice
 
   };
 
@@ -272,252 +149,74 @@ async function registerOrUpdateDevice({
 
 
 
-
-/*
-=========================================================
-GET USER DEVICE
-=========================================================
-*/
-
-
-async function getUserDevice({
-
-  userId,
-
-  deviceId
-
-}) {
-
-
-  return DeviceSession.findOne({
-
-    user:userId,
-
-    deviceId
-
-  });
-
-
-}
-
-
-
-
-
-
-
-
-/*
-=========================================================
-CHECK TRUSTED DEVICE
-=========================================================
-*/
-
-
-async function isTrustedDevice({
-
-  userId,
-
-  deviceId
-
-}) {
-
-
-  const device =
-
-    await getUserDevice({
-
-      userId,
-
-      deviceId
-
-    });
-
-
-
-
-  return Boolean(
-
-    device &&
-
-    device.trusted === true
-
-  );
-
-
-}
-
-
-
-
-
-
-
-
-
-/*
-=========================================================
-DEVICE PLATFORM DETECTION
-=========================================================
-*/
-
-
 function detectPlatform(userAgent=''){
 
-
-  const agent =
-
-    userAgent.toLowerCase();
+ const agent =
+ userAgent.toLowerCase();
 
 
+ if(agent.includes('android'))
+ return 'android';
 
 
-  if(agent.includes('android')){
+ if(
+ agent.includes('iphone') ||
+ agent.includes('ipad')
+ )
+ return 'ios';
 
 
-    return 'android';
+ if(agent.includes('windows'))
+ return 'windows';
 
 
-  }
+ if(agent.includes('mac'))
+ return 'mac';
 
 
-
-
-
-  if(
-
-    agent.includes('iphone') ||
-
-    agent.includes('ipad')
-
-  ){
-
-
-    return 'ios';
-
-
-  }
-
-
-
-
-
-
-  if(agent.includes('windows')){
-
-
-    return 'windows';
-
-
-  }
-
-
-
-
-
-
-  if(agent.includes('mac')){
-
-
-    return 'mac';
-
-
-  }
-
-
-
-
-
-  return 'unknown';
-
+ return 'unknown';
 
 }
 
 
 
-
-
-
-
-
-/*
-=========================================================
-DEVICE NAME DETECTION
-=========================================================
-*/
 
 
 function detectDeviceName(userAgent=''){
 
 
-  const agent =
-
-    userAgent.toLowerCase();
-
+ if(userAgent.includes('Android'))
+ return 'Android Device';
 
 
-
-  if(agent.includes('android')){
-
-
-    return 'Android Device';
+ if(userAgent.includes('iPhone'))
+ return 'iPhone';
 
 
-  }
+ return 'Web Browser';
+
+}
 
 
 
 
 
-  if(agent.includes('iphone')){
+async function getUserDevice({
+
+ userId,
+
+ deviceId
+
+}){
 
 
-    return 'iPhone';
+ return DeviceSession.findOne({
 
+  user:userId,
 
-  }
+  deviceId
 
-
-
-
-
-  if(agent.includes('ipad')){
-
-
-    return 'iPad';
-
-
-  }
-
-
-
-
-
-  if(agent.includes('windows')){
-
-
-    return 'Windows Browser';
-
-
-  }
-
-
-
-
-
-  if(agent.includes('mac')){
-
-
-    return 'Mac Browser';
-
-
-  }
-
-
-
-
-
-  return 'Unknown Device';
+ });
 
 
 }
@@ -527,21 +226,46 @@ function detectDeviceName(userAgent=''){
 
 
 
+async function isTrustedDevice({
+
+ userId,
+
+ deviceId
+
+}){
 
 
-module.exports = {
+ const device =
+ await getUserDevice({
+
+  userId,
+
+  deviceId
+
+ });
 
 
-  registerOrUpdateDevice,
+ return Boolean(
+
+  device &&
+  device.trusted
+
+ );
 
 
-  getUserDevice,
+}
 
 
-  isTrustedDevice,
 
 
-  generateDeviceId
+module.exports={
 
+ registerOrUpdateDevice,
+
+ getUserDevice,
+
+ isTrustedDevice,
+
+ generateDeviceId
 
 };
