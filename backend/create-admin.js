@@ -1,4 +1,7 @@
 require('dotenv').config();
+console.log(
+  "CREATE ADMIN FILE VERSION: returnDocument FIXED"
+);
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
