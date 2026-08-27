@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 
+
 const securityAlertSchema = new mongoose.Schema(
 
 {
@@ -9,20 +10,21 @@ const securityAlertSchema = new mongoose.Schema(
 
     type: mongoose.Schema.Types.ObjectId,
 
-    ref: 'User',
+    ref:'User',
 
-    required: true,
+    required:true,
 
-    index: true
+    index:true
 
   },
 
 
+
   type: {
 
-    type: String,
+    type:String,
 
-    enum: [
+    enum:[
 
       'NEW_DEVICE',
 
@@ -30,28 +32,90 @@ const securityAlertSchema = new mongoose.Schema(
 
       'MULTIPLE_DEVICES',
 
-      'SUSPICIOUS_LOGIN',
-
-      'FAILED_LOGIN',
-
-      'PASSWORD_CHANGE',
-
-      'LOGOUT_ALL'
+      'SUSPICIOUS_LOGIN'
 
     ],
 
-    required: true,
+    required:true,
 
-    index: true
+    index:true
 
   },
 
 
+
+  message: {
+
+    type:String,
+
+    required:true
+
+  },
+
+
+
+  deviceId: {
+
+    type:String,
+
+    default:null
+
+  },
+
+
+
+  deviceName: {
+
+    type:String,
+
+    default:'Unknown Device'
+
+  },
+
+
+
+  platform: {
+
+    type:String,
+
+    default:'unknown'
+
+  },
+
+
+
+  ipAddress: {
+
+    type:String,
+
+    default:null
+
+  },
+
+
+
+  userAgent: {
+
+    type:String,
+
+    default:null
+
+  },
+
+
+
+  /*
+  =====================================================
+  ALERT PRIORITY
+  =====================================================
+  */
+
+
   severity: {
 
-    type: String,
+    type:String,
 
-    enum: [
+    enum:[
 
       'LOW',
 
@@ -63,94 +127,92 @@ const securityAlertSchema = new mongoose.Schema(
 
     ],
 
-    default: 'MEDIUM'
+    default:'MEDIUM'
 
   },
 
 
-  message: {
-
-    type: String,
-
-    required: true
-
-  },
 
 
-  deviceId: {
 
-    type: String
-
-  },
-
-
-  deviceName: {
-
-    type: String
-
-  },
-
-
-  platform: {
-
-    type: String
-
-  },
-
-
-  ipAddress: {
-
-    type: String
-
-  },
-
-
-  userAgent: {
-
-    type: String
-
-  },
+  /*
+  =====================================================
+  READ STATUS
+  =====================================================
+  */
 
 
   read: {
 
-    type: Boolean,
+    type:Boolean,
 
-    default: false,
+    default:false,
 
-    index: true
+    index:true
 
   },
+
+
+
+
+
+  /*
+  =====================================================
+  USER RESOLUTION STATUS
+  =====================================================
+  */
 
 
   resolved: {
 
-    type: Boolean,
+    type:Boolean,
 
-    default: false
+    default:false,
+
+    index:true
 
   },
 
 
+
+
+
+  /*
+  =====================================================
+  EXTRA SECURITY DATA
+  =====================================================
+  */
+
+
   metadata: {
 
-    type: mongoose.Schema.Types.Mixed,
+    type:Object,
 
-    default: {}
+    default:{}
 
   }
 
 
 },
 
+
 {
 
-  timestamps:true
+timestamps:true
 
 }
 
 );
 
+
+
+
+
+/*
+=========================================================
+INDEXES
+=========================================================
+*/
 
 
 securityAlertSchema.index({
@@ -162,8 +224,35 @@ securityAlertSchema.index({
 });
 
 
-module.exports =
-mongoose.model(
-  'SecurityAlert',
-  securityAlertSchema
+
+securityAlertSchema.index({
+
+  user:1,
+
+  read:1
+
+});
+
+
+
+securityAlertSchema.index({
+
+  user:1,
+
+  type:1,
+
+  createdAt:-1
+
+});
+
+
+
+
+
+module.exports = mongoose.model(
+
+'SecurityAlert',
+
+securityAlertSchema
+
 );

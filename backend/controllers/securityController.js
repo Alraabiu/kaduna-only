@@ -801,16 +801,312 @@ next(error);
 
 }
 
+/*
+=========================================================
+GET SECURITY ALERTS
+=========================================================
+*/
+
+async function getSecurityAlerts(req,res,next){
+
+try{
+
+
+const alerts =
+
+await SecurityAlert.find({
+
+user:req.user._id
+
+})
+
+.sort({
+
+createdAt:-1
+
+})
+
+.limit(100);
+
+
+
+res.json({
+
+success:true,
+
+alerts
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+
+/*
+=========================================================
+GET UNREAD ALERT COUNT
+=========================================================
+*/
+
+async function getUnreadAlertCount(req,res,next){
+
+try{
+
+
+const count =
+
+await SecurityAlert.countDocuments({
+
+user:req.user._id,
+
+read:false
+
+});
+
+
+
+res.json({
+
+success:true,
+
+count
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
 
 
 
 
 
 
+
+/*
+=========================================================
+MARK SINGLE ALERT READ
+=========================================================
+*/
+
+async function markAlertRead(req,res,next){
+
+try{
+
+
+const alert =
+
+await SecurityAlert.findOneAndUpdate(
+
+{
+
+_id:req.params.id,
+
+user:req.user._id
+
+},
+
+{
+
+$set:{
+
+read:true
+
+}
+
+},
+
+{
+
+returnDocument:'after'
+
+}
+
+);
+
+
+
+if(!alert){
+
+return res.status(404).json({
+
+success:false,
+
+message:
+'Alert not found'
+
+});
+
+}
+
+
+
+res.json({
+
+success:true,
+
+alert
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+/*
+=========================================================
+MARK ALL ALERTS READ
+=========================================================
+*/
+
+async function markAllAlertsRead(req,res,next){
+
+try{
+
+
+await SecurityAlert.updateMany(
+
+{
+
+user:req.user._id,
+
+read:false
+
+},
+
+{
+
+$set:{
+
+read:true
+
+}
+
+}
+
+);
+
+
+
+res.json({
+
+success:true,
+
+message:
+'All alerts marked as read'
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
+
+/*
+=========================================================
+RESOLVE ALERT
+=========================================================
+*/
+
+async function resolveAlert(req,res,next){
+
+try{
+
+
+const alert =
+
+await SecurityAlert.findOneAndUpdate(
+
+{
+
+_id:req.params.id,
+
+user:req.user._id
+
+},
+
+{
+
+$set:{
+
+resolved:true
+
+}
+
+},
+
+{
+
+returnDocument:'after'
+
+}
+
+);
+
+
+
+if(!alert){
+
+return res.status(404).json({
+
+success:false,
+
+message:
+'Alert not found'
+
+});
+
+}
+
+
+
+res.json({
+
+success:true,
+
+message:
+'Security alert resolved',
+
+alert
+
+});
+
+
+
+}catch(error){
+
+next(error);
+
+}
+
+}
 
 
 module.exports = {
-
 
 getDevices,
 
@@ -822,9 +1118,7 @@ untrustDevice,
 
 logoutAllDevices,
 
-
 getLoginHistory,
-
 
 getSecurityAlerts,
 
@@ -835,6 +1129,5 @@ markAlertRead,
 markAllAlertsRead,
 
 resolveAlert
-
 
 };
