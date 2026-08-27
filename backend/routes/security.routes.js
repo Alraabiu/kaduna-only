@@ -3,19 +3,38 @@ const express = require('express');
 const router = express.Router();
 
 
+
 const {
+
   getDevices,
+
   removeDevice,
+
   trustDevice,
+
   untrustDevice,
+
   logoutAllDevices,
-  getLoginHistory
+
+  getLoginHistory,
+
+  getSecurityAlerts,
+
+  getUnreadAlertCount,
+
+  markAlertRead,
+
+  markAllAlertsRead,
+
+  resolveAlert
+
 
 } = require('../controllers/securityController');
 
 
 
 const {
+
   requireAuth
 
 } = require('../middleware/auth');
@@ -34,14 +53,27 @@ DEVICE MANAGEMENT
 /*
 GET ALL USER DEVICES
 
-Returns all logged-in devices
+Returns:
+
+- Device name
+- Platform
+- IP
+- Trusted status
+- Last active time
+
 */
 
 router.get(
+
   '/devices',
+
   requireAuth,
+
   getDevices
+
 );
+
+
 
 
 
@@ -51,13 +83,19 @@ router.get(
 REMOVE DEVICE
 
 Force remove a device session
+
 */
 
 router.delete(
+
   '/devices/:deviceId',
+
   requireAuth,
+
   removeDevice
+
 );
+
 
 
 
@@ -68,13 +106,19 @@ router.delete(
 TRUST DEVICE
 
 Mark device as trusted
+
 */
 
 router.patch(
+
   '/devices/:deviceId/trust',
+
   requireAuth,
+
   trustDevice
+
 );
+
 
 
 
@@ -85,12 +129,17 @@ router.patch(
 UNTRUST DEVICE
 
 Remove trusted status
+
 */
 
 router.patch(
+
   '/devices/:deviceId/untrust',
+
   requireAuth,
+
   untrustDevice
+
 );
 
 
@@ -102,14 +151,21 @@ router.patch(
 /*
 LOGOUT ALL DEVICES
 
-Invalidate all trusted sessions
+Invalidate all sessions
+
 */
 
 router.post(
+
   '/logout-all',
+
   requireAuth,
+
   logoutAllDevices
+
 );
+
+
 
 
 
@@ -120,24 +176,165 @@ router.post(
 =========================================================
 LOGIN HISTORY
 =========================================================
-
-Shows:
-
-- Login time
-- Device used
-- Platform
-- IP address
-- User agent
-- Login status
-
 */
 
 
+/*
+GET LOGIN HISTORY
+
+Returns:
+
+- Login time
+- Device
+- Platform
+- IP address
+- User agent
+- Status
+
+*/
+
 router.get(
+
   '/login-history',
+
   requireAuth,
+
   getLoginHistory
+
 );
+
+
+
+
+
+
+
+
+
+/*
+=========================================================
+SECURITY ALERTS
+=========================================================
+*/
+
+
+
+/*
+GET ALL SECURITY ALERTS
+
+Returns:
+
+- New device alerts
+- New IP alerts
+- Suspicious activity
+
+*/
+
+router.get(
+
+  '/alerts',
+
+  requireAuth,
+
+  getSecurityAlerts
+
+);
+
+
+
+
+
+
+
+/*
+GET UNREAD ALERT COUNT
+
+Used for notification badge
+
+Example:
+
+Security 🔴 3
+
+*/
+
+router.get(
+
+  '/alerts/unread-count',
+
+  requireAuth,
+
+  getUnreadAlertCount
+
+);
+
+
+
+
+
+
+
+/*
+MARK SINGLE ALERT AS READ
+
+*/
+
+router.patch(
+
+  '/alerts/:id/read',
+
+  requireAuth,
+
+  markAlertRead
+
+);
+
+
+
+
+
+
+
+/*
+MARK ALL ALERTS AS READ
+
+*/
+
+router.post(
+
+  '/alerts/read-all',
+
+  requireAuth,
+
+  markAllAlertsRead
+
+);
+
+
+
+
+
+
+
+/*
+RESOLVE SECURITY ALERT
+
+Example:
+
+User confirms new login
+
+*/
+
+router.patch(
+
+  '/alerts/:id/resolve',
+
+  requireAuth,
+
+  resolveAlert
+
+);
+
+
 
 
 
