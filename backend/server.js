@@ -473,444 +473,544 @@ io.on(
   'connection',
   async socket => {
 
-    const user =
-      socket.user;
+    try {
 
-    const userId =
-      String(user._id);
+      const user =
+        socket.user;
 
-    console.log(
-      `[SOCKET CONNECTED] ${user.role} ${user.fullName} (${userId})`
-    );
 
-    socket.join(
-      `user:${userId}`
-    );
+      if(!user){
 
-    socket.join(
-      `role:${user.role}`
-    );
-
-    /* =====================================================
-       ADMIN INITIAL DRIVER SNAPSHOT
-    ===================================================== */
-
-    if (
-      user.role === 'admin'
-    ) {
-
-      try {
-
-        const drivers =
-          await getOnlineDriverSnapshot();
-
-        socket.emit(
-          'drivers:locations',
-          {
-            drivers,
-
-            updatedAt:
-              new Date()
-          }
+        console.log(
+          '[SOCKET ERROR] Missing authenticated user'
         );
 
-      } catch (e) {
+        socket.disconnect(true);
 
-        console.error(
-          '[ADMIN SNAPSHOT]',
-          e
-        );
+        return;
+
       }
-    }
+      const userId =
+        String(user._id);
 
-    /* =====================================================
-       DRIVER ROOM INITIALIZATION
-    ===================================================== */
 
-    if (
-      user.role === 'driver'
-    ) {
 
-      try {
+      console.log(
+        `[SOCKET CONNECTED] ${user.role} ${user.fullName} (${userId})`
+      );
 
-        const profile =
-          await DriverProfile.findOne(
+      /*
+      =====================================================
+      PRIVATE USER ROOM
+
+      Personal events:
+      - wallet updates
+      - trip updates
+      - notifications
+      =====================================================
+      */
+
+      socket.join(
+        `user:${userId}`
+      );
+
+      /*
+      =====================================================
+      SECURITY ROOM
+
+      Security alerts:
+      - new device
+      - suspicious login
+      - new IP
+      =====================================================
+      */
+
+      socket.join(
+        `security:${userId}`
+      );
+
+      /*
+      =====================================================
+      ROLE ROOM
+
+      admin
+      driver
+      rider
+
+      =====================================================
+      */
+
+      socket.join(
+        `role:${user.role}`
+      );
+      socket.data.userId =
+        userId;
+
+
+      socket.data.role =
+        user.role;
+
+      /*
+      =====================================================
+      SOCKET READY
+      =====================================================
+      */
+
+
+      socket.emit(
+        'socket_ready',
+        {
+          success:true,
+
+          userId,
+
+          role:user.role,
+
+          serverTime:
+            new Date()
+        }
+      );
+
+      /*
+      =====================================================
+      ADMIN INITIAL DRIVER SNAPSHOT
+      =====================================================
+      */
+
+
+      if(
+        user.role === 'admin'
+      ){
+
+        try{
+
+
+          const drivers =
+            await getOnlineDriverSnapshot();
+
+
+
+          socket.emit(
+            'drivers:locations',
             {
-              user: user._id
+
+              drivers,
+
+              updatedAt:
+                new Date()
+
             }
-          ).select(
-            'online verificationStatus vehicleType'
           );
 
-        if (
-          profile?.online &&
-          profile.verificationStatus ===
-            'approved'
-        ) {
 
-          socket.join(
-            `drivers:online:${profile.vehicleType}`
+        }catch(error){
+
+
+          console.error(
+            '[ADMIN SNAPSHOT]',
+            error
           );
+
+
         }
 
-      } catch (e) {
-
-        console.error(
-          '[DRIVER ROOM]',
-          e
-        );
       }
-    }
 
-    /* =====================================================
-       REALTIME READY
-    ===================================================== */
+      /*
+      =====================================================
+      DRIVER ROOM INITIALIZATION
+      =====================================================
+      */
 
-    socket.emit(
-      'realtime:ready',
-      {
-        connected: true,
 
-        userId,
+      if(
+        user.role === 'driver'
+      ){
 
-        role:
-          user.role,
+        try{
 
-        serverTime:
-          new Date()
-      }
-    );
-
-    /* =====================================================
-       DRIVER AVAILABILITY
-    ===================================================== */
-
-    socket.on(
-      'driver:availability',
-
-      async (
-        payload = {},
-        ack = () => {}
-      ) => {
-
-        try {
-
-          if (
-            user.role !==
-            'driver'
-          ) {
-
-            throw new Error(
-              'Driver access required'
-            );
-          }
 
           const profile =
-            await DriverProfile.findOne(
-              {
-                user: user._id
-              }
-            ).select(
+            await DriverProfile.findOne({
+
+              user:user._id
+
+            })
+            .select(
               'online verificationStatus vehicleType'
             );
 
-          if (
-            !profile ||
-            profile.verificationStatus !==
-              'approved'
-          ) {
 
-            throw new Error(
-              'Approved driver profile required'
-            );
-          }
 
-          for (
-            const room of [
-              'bike',
-              'keke',
-              'car',
-              'suv'
-            ].map(
-              v =>
-                `drivers:online:${v}`
-            )
-          ) {
 
-            socket.leave(
-              room
-            );
-          }
+          if(
+            profile &&
+            profile.online &&
+            profile.verificationStatus === 'approved'
+          ){
 
-          if (
-            profile.online
-          ) {
 
             socket.join(
+
               `drivers:online:${profile.vehicleType}`
+
             );
+
+
           }
 
-          ack({
-            success: true,
 
-            online:
-              profile.online,
 
-            vehicleType:
-              profile.vehicleType
-          });
+        }catch(error){
 
-          await broadcastDriverSnapshot();
-
-        } catch (e) {
 
           console.error(
-            '[DRIVER AVAILABILITY]',
-            e.message
+            '[DRIVER ROOM]',
+            error
           );
 
-          ack({
-            success: false,
 
-            message:
-              e.message
-          });
         }
+
       }
-    );
 
-    /* =====================================================
-       DRIVER GPS LOCATION
-    ===================================================== */
+      /*
+      =====================================================
+      DRIVER AVAILABILITY
+      =====================================================
+      */
 
-    socket.on(
-      'driver:location',
 
-      async (
-        payload = {},
-        ack = () => {}
-      ) => {
+      socket.on(
 
-        try {
+        'driver:availability',
 
-          if (
-            user.role !==
-            'driver'
-          ) {
+        async(
+          payload={},
+          ack=()=>{}
+        )=>{
 
-            throw new Error(
-              'Driver access required'
-            );
-          }
 
-          const latitude =
-            Number(
-              payload.latitude
-            );
+          try{
 
-          const longitude =
-            Number(
-              payload.longitude
-            );
 
-          const accuracy =
-            payload.accuracy == null
-              ? undefined
-              : Number(
-                  payload.accuracy
-                );
+            if(
+              user.role !== 'driver'
+            ){
 
-          if (
-            !Number.isFinite(
-              latitude
-            ) ||
-            latitude < -90 ||
-            latitude > 90 ||
-            !Number.isFinite(
-              longitude
-            ) ||
-            longitude < -180 ||
-            longitude > 180
-          ) {
-
-            throw new Error(
-              'Valid latitude and longitude are required'
-            );
-          }
-
-          const profile =
-            await DriverProfile.findOneAndUpdate(
-              {
-                user:
-                  user._id,
-
-                verificationStatus:
-                  'approved'
-              },
-
-              {
-                $set: {
-                  location: {
-                    latitude,
-
-                    longitude,
-
-                    ...(Number.isFinite(
-                      accuracy
-                    )
-                      ? {
-                          accuracy
-                        }
-                      : {}),
-
-                    updatedAt:
-                      new Date()
-                  }
-                }
-              },
-
-              {
-                returnDocument:
-                  'after'
-              }
-            );
-
-          if (!profile) {
-
-            throw new Error(
-              'Approved driver profile required'
-            );
-          }
-
-          const active =
-            await Trip.findOne({
-              driver:
-                user._id,
-
-              status: {
-                $in:
-                  ACTIVE_TRIP_STATUSES
-              }
-            })
-              .populate(
-                'rider',
-                'fullName phone'
-              )
-              .select(
-                '_id tripId rider vehicleType pickup destination fare status arrivalStatus'
+              throw new Error(
+                'Driver access required'
               );
 
-          let arrival =
-            null;
+            }
 
-          if (active) {
 
-            arrival =
-              await processDriverLocation({
-                trip:
-                  active,
 
-                latitude,
 
-                longitude,
+            const profile =
+              await DriverProfile.findOne({
 
-                accuracy
+                user:user._id
+
               });
+
+
+
+
+
+            if(
+              !profile ||
+              profile.verificationStatus !== 'approved'
+            ){
+
+              throw new Error(
+                'Driver not approved'
+              );
+
+            }
+            const rooms = [
+
+              'bike',
+
+              'keke',
+
+              'car',
+
+              'suv'
+
+            ];
+            rooms.forEach(
+
+              vehicle=>{
+
+                socket.leave(
+                  `drivers:online:${vehicle}`
+                );
+
+              }
+
+            );
+
+            if(
+              profile.online
+            ){
+
+              socket.join(
+
+                `drivers:online:${profile.vehicleType}`
+
+              );
+
+            }
+            ack({
+
+              success:true,
+
+              online:
+                profile.online,
+
+              vehicleType:
+                profile.vehicleType
+
+            });
+            await broadcastDriverSnapshot();
+
+          }catch(error){
+
+
+            ack({
+
+              success:false,
+
+              message:
+                error.message
+
+            });
+
+
           }
 
-          emitDriverLocation({
 
-            driverId:
-              user._id,
+        }
 
-            riderId:
-              active?.rider?._id ||
-              active?.rider ||
-              null,
+      );
 
-            tripId:
-              active?._id ||
-              null,
+      /*
+      =====================================================
+      DRIVER LOCATION UPDATE
+      =====================================================
+      */
 
-            location:
-              profile.location,
+      socket.on(
 
-            driver: {
-              id:
-                String(
-                  user._id
-                ),
+        'driver:location',
 
-              name:
-                user.fullName,
+        async(
 
-              role:
-                user.role
-            },
+          payload={},
 
-            trip:
-              active ||
-              null
-          });
+          ack=()=>{}
 
-          ack({
+        )=>{
 
-            success: true,
 
-            location:
-              profile.location,
+          try{
 
-            tripId:
-              active?._id ||
-              null,
 
-            arrival:
-              arrival
-                ? {
-                    state:
-                      arrival.state,
+            if(
+              user.role !== 'driver'
+            ){
 
-                    distanceMeters:
-                      arrival.distanceMeters
+              throw new Error(
+                'Driver access required'
+              );
+
+            }
+
+            const latitude =
+              Number(
+                payload.latitude
+              );
+
+
+            const longitude =
+              Number(
+                payload.longitude
+              );
+
+            if(
+
+              !Number.isFinite(latitude)
+
+              ||
+
+              !Number.isFinite(longitude)
+
+            ){
+
+              throw new Error(
+                'Invalid coordinates'
+              );
+
+            }
+
+            const profile =
+
+              await DriverProfile.findOneAndUpdate(
+
+                {
+
+                  user:user._id,
+
+                  verificationStatus:'approved'
+
+                },
+
+
+                {
+
+                  $set:{
+
+                    location:{
+
+                      latitude,
+
+                      longitude,
+
+                      accuracy:
+                        payload.accuracy,
+
+                      updatedAt:
+                        new Date()
+
+                    }
+
                   }
-                : null
-          });
 
-        } catch (e) {
+                },
 
-          console.error(
-            '[DRIVER LOCATION]',
-            e.message
+
+                {
+
+                  returnDocument:'after'
+
+                }
+
+              );
+
+            if(!profile){
+
+
+              throw new Error(
+                'Driver profile unavailable'
+              );
+            }
+
+            emitDriverLocation({
+
+              driverId:
+                user._id,
+
+
+              location:
+                profile.location,
+
+              driver:{
+
+                id:
+                  userId,
+
+                name:
+                  user.fullName,
+
+                role:
+                  user.role
+
+              }
+
+            });
+
+            ack({
+
+              success:true,
+
+              location:
+                profile.location
+
+            });
+
+          }catch(error){
+
+            console.error(
+              '[DRIVER LOCATION]',
+              error.message
+            );
+
+
+
+            ack({
+
+              success:false,
+
+              message:
+                error.message
+
+            });
+
+
+          }
+
+
+        }
+
+      );
+
+      /*
+      =====================================================
+      DISCONNECT
+      =====================================================
+      */
+
+
+      socket.on(
+
+        'disconnect',
+
+        reason=>{
+
+
+          console.log(
+
+            `[SOCKET DISCONNECTED] ${user.role} ${user.fullName} (${userId}) - ${reason}`
+
           );
 
-          ack({
 
-            success: false,
-
-            message:
-              e.message
-          });
         }
-      }
-    );
 
-    /* =====================================================
-       SOCKET DISCONNECT
-    ===================================================== */
+      );
 
-    socket.on(
-      'disconnect',
-      reason => {
+    }catch(error){
 
-        console.log(
-          `[SOCKET DISCONNECTED] ${user.role} ${user.fullName} (${userId}) - ${reason}`
-        );
-      }
-    );
+
+      console.error(
+
+        '[SOCKET CONNECTION ERROR]',
+
+        error
+
+      );
+
+
+      socket.disconnect(true);
+
+
+    }
+
+
   }
-);
 
+);
 /* =========================================================
    SERVER STARTUP
 ========================================================= */
