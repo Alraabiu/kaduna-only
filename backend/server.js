@@ -1,22 +1,18 @@
-const dns = require('dns');
+﻿const dns = require('dns');
 
 dns.setServers([
   '8.8.8.8',
   '1.1.1.1'
 ]);
 
-
 require('dotenv').config();
 
-
 const crypto = require('crypto');
-
 
 const paystackKeyCheck =
   String(
     process.env.PAYSTACK_SECRET_KEY || ''
   ).trim();
-
 
 console.log('[PAYSTACK CONFIG]', {
 
@@ -62,15 +58,13 @@ const {
 } = require('./realtime');
 
 const {
-  processDriverLocation
-} = require('./services/destinationArrivalService');
-
-const {
   initPush
 } = require('./services/pushService');
 
 const app = express();
+
 app.set('trust proxy', true);
+
 
 /* =========================================================
    HTTP CONFIGURATION
@@ -100,6 +94,10 @@ app.use(
   })
 );
 
+app.use(
+  '/uploads',
+  express.static('uploads')
+);
 
 
 /*
@@ -110,47 +108,82 @@ NORMAL JSON BODY HANDLER
 
 app.use(
   express.json({
-    limit:'2mb'
+    limit: '2mb'
   })
 );
-
 
 app.use(
   express.urlencoded({
-    extended:true,
-    limit:'2mb'
+    extended: true,
+    limit: '2mb'
   })
 );
 
+app.use(
+  morgan('dev')
+);
 
-app.use(morgan('dev'));
 
 /* =========================================================
    HEALTH CHECK
 ========================================================= */
+
 app.get('/', (req, res) => {
+
   res.status(200).json({
+
     success: true,
-    application: 'Kaduna Only',
-    status: 'online',
-    api: true,
-    realtime: true,
-    timestamp: new Date().toISOString()
+
+    application:
+      'Kaduna Only',
+
+    status:
+      'online',
+
+    api:
+      true,
+
+    realtime:
+      true,
+
+    timestamp:
+      new Date().toISOString()
+
   });
-});
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    status: 'ok',
-    message: 'Kaduna Only API is running',
-    realtime: true,
-    host: '0.0.0.0',
-    port: process.env.PORT || 5000
-  });
+
 });
 
+
+app.get('/api/health', (req, res) => {
+
+  res.json({
+
+    success: true,
+
+    status:
+      'ok',
+
+    message:
+      'Kaduna Only API is running',
+
+    realtime:
+      true,
+
+    host:
+      '0.0.0.0',
+
+    port:
+      process.env.PORT || 5000
+
+  });
+
+});
+
+
 /* =========================================================
+
    API ROUTES
+
 ========================================================= */
 
 app.use(
@@ -161,6 +194,11 @@ app.use(
 app.use(
   '/api/rider',
   require('./routes/rider.routes')
+);
+
+app.use(
+  '/api/messages',
+  require('./routes/message.routes')
 );
 
 app.use(
@@ -203,11 +241,17 @@ app.use(
   require('./routes/security.routes')
 );
 
+
+app.use(
+  '/api/upload',
+  require('./routes/upload.routes')
+);
 /* =========================================================
    HTTP ERROR HANDLER
 ========================================================= */
 
 app.use((err, req, res, next) => {
+
   console.error(
     '[HTTP ERROR]',
     err
@@ -216,12 +260,18 @@ app.use((err, req, res, next) => {
   res.status(
     err.statusCode || 500
   ).json({
-    success: false,
+
+    success:
+      false,
+
     message:
       err.message ||
       'Server error'
+
   });
+
 });
+
 
 /* =========================================================
    HTTP + SOCKET SERVER
@@ -231,169 +281,184 @@ const server =
   http.createServer(app);
 
 const io =
-
   new Server(
-
     server,
-
     {
 
       cors: {
 
-        origin: true,
+        origin:
+          true,
 
-        credentials: true,
+        credentials:
+          true,
 
         methods: [
 
           'GET',
-
           'POST',
-
           'PUT',
-
           'PATCH',
-
           'DELETE',
-
           'OPTIONS'
 
         ]
 
       },
 
-
       transports: [
 
         'websocket',
-
         'polling'
 
       ],
 
-
-      allowEIO3:true
+      allowEIO3:
+        true
 
     }
-
-);
-
+  );
 
 
+app.locals.io =
+  io;
 
 
 /*
 =========================================================
 MAKE SOCKET.IO AVAILABLE GLOBALLY
 =========================================================
-Used by:
-
-- Security alerts
-- Wallet notifications
-- Trip updates
-- Realtime events
-
-=========================================================
 */
 
-
-global.io = io;
+global.io =
+  io;
 
 
 /*
 =========================================================
 REALTIME SERVICE CONNECTION
 =========================================================
-Keeps existing realtime abstraction working
-
-=========================================================
 */
 
+setIO(
+  io
+);
 
-setIO(io);
 
 /* =========================================================
    SOCKET AUTHENTICATION
 ========================================================= */
 
-io.use(async (socket, next) => {
-  try {
-    const token =
-      socket.handshake.auth?.token;
+io.use(
+  async (
+    socket,
+    next
+  ) => {
 
-    if (!token) {
-      return next(
+    try {
+
+      const token =
+        socket.handshake.auth?.token;
+
+
+      if (!token) {
+
+        return next(
+          new Error(
+            'Authentication required'
+          )
+        );
+
+      }
+
+
+      const decoded =
+        jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        );
+
+
+      const id =
+        decoded.sub ||
+        decoded.id ||
+        decoded.userId ||
+        decoded._id;
+
+
+      if (!id) {
+
+        return next(
+          new Error(
+            'Invalid authentication token'
+          )
+        );
+
+      }
+
+
+      const user =
+        await User.findById(
+          id
+        ).select(
+          '_id role status fullName phone'
+        );
+
+
+      if (
+        !user ||
+        user.status !== 'active'
+      ) {
+
+        return next(
+          new Error(
+            'Account unavailable'
+          )
+        );
+
+      }
+
+
+      socket.user =
+        user;
+
+      next();
+
+    } catch (e) {
+
+      console.error(
+        '[SOCKET AUTH]',
+        e.message
+      );
+
+      next(
         new Error(
-          'Authentication required'
+          'Invalid authentication'
         )
       );
+
     }
 
-    const decoded =
-      jwt.verify(
-        token,
-        process.env.JWT_SECRET
-      );
-
-    const id =
-      decoded.sub ||
-      decoded.id ||
-      decoded.userId ||
-      decoded._id;
-
-    if (!id) {
-      return next(
-        new Error(
-          'Invalid authentication token'
-        )
-      );
-    }
-
-    const user =
-      await User.findById(id).select(
-        '_id role status fullName phone'
-      );
-
-    if (
-      !user ||
-      user.status !== 'active'
-    ) {
-      return next(
-        new Error(
-          'Account unavailable'
-        )
-      );
-    }
-
-    socket.user = user;
-
-    next();
-
-  } catch (e) {
-
-    console.error(
-      '[SOCKET AUTH]',
-      e.message
-    );
-
-    next(
-      new Error(
-        'Invalid authentication'
-      )
-    );
   }
-});
+);
+
 
 /* =========================================================
    ACTIVE TRIP STATUSES
 ========================================================= */
 
 const ACTIVE_TRIP_STATUSES = [
+
   'DRIVER_ASSIGNED',
+
   'DRIVER_ARRIVING',
+
   'DRIVER_ARRIVED',
+
   'TRIP_STARTED'
+
 ];
+
 
 /* =========================================================
    BUILD ADMIN DRIVER SNAPSHOT
@@ -403,9 +468,13 @@ async function getOnlineDriverSnapshot() {
 
   const onlineDrivers =
     await DriverProfile.find({
-      online: true,
+
+      online:
+        true,
+
       verificationStatus:
         'approved'
+
     })
       .populate(
         'user',
@@ -413,12 +482,15 @@ async function getOnlineDriverSnapshot() {
       )
       .lean();
 
+
   const activeTrips =
     await Trip.find({
+
       status: {
         $in:
           ACTIVE_TRIP_STATUSES
       }
+
     })
       .populate(
         'rider',
@@ -426,17 +498,24 @@ async function getOnlineDriverSnapshot() {
       )
       .lean();
 
+
   const tripByDriver =
     new Map(
+
       activeTrips.map(
         trip => [
+
           String(
             trip.driver
           ),
+
           trip
+
         ]
       )
+
     );
+
 
   return onlineDrivers.map(
     profile => {
@@ -447,6 +526,7 @@ async function getOnlineDriverSnapshot() {
           profile.user
         );
 
+
       return {
 
         driverId,
@@ -454,7 +534,9 @@ async function getOnlineDriverSnapshot() {
         driver:
           profile.user
             ? {
-                id: driverId,
+
+                id:
+                  driverId,
 
                 name:
                   profile.user
@@ -471,6 +553,7 @@ async function getOnlineDriverSnapshot() {
                 status:
                   profile.user
                     .status
+
               }
             : null,
 
@@ -485,10 +568,14 @@ async function getOnlineDriverSnapshot() {
           tripByDriver.get(
             driverId
           ) || null
+
       };
+
     }
   );
+
 }
+
 
 /* =========================================================
    BROADCAST ADMIN DRIVER SNAPSHOT
@@ -501,17 +588,21 @@ async function broadcastDriverSnapshot() {
     const drivers =
       await getOnlineDriverSnapshot();
 
+
     io
       .to('role:admin')
       .emit(
         'drivers:locations',
         {
+
           drivers,
 
           updatedAt:
             new Date()
+
         }
       );
+
 
   } catch (e) {
 
@@ -519,8 +610,11 @@ async function broadcastDriverSnapshot() {
       '[DRIVER SNAPSHOT]',
       e
     );
+
   }
+
 }
+
 
 /* =========================================================
    SOCKET CONNECTION
@@ -536,34 +630,35 @@ io.on(
         socket.user;
 
 
-      if(!user){
+      if (!user) {
 
         console.log(
           '[SOCKET ERROR] Missing authenticated user'
         );
 
-        socket.disconnect(true);
+        socket.disconnect(
+          true
+        );
 
         return;
 
       }
-      const userId =
-        String(user._id);
 
+
+      const userId =
+        String(
+          user._id
+        );
 
 
       console.log(
         `[SOCKET CONNECTED] ${user.role} ${user.fullName} (${userId})`
       );
 
+
       /*
       =====================================================
       PRIVATE USER ROOM
-
-      Personal events:
-      - wallet updates
-      - trip updates
-      - notifications
       =====================================================
       */
 
@@ -571,14 +666,10 @@ io.on(
         `user:${userId}`
       );
 
+
       /*
       =====================================================
       SECURITY ROOM
-
-      Security alerts:
-      - new device
-      - suspicious login
-      - new IP
       =====================================================
       */
 
@@ -586,26 +677,24 @@ io.on(
         `security:${userId}`
       );
 
+
       /*
       =====================================================
       ROLE ROOM
-
-      admin
-      driver
-      rider
-
       =====================================================
       */
 
       socket.join(
         `role:${user.role}`
       );
+
+
       socket.data.userId =
         userId;
 
-
       socket.data.role =
         user.role;
+
 
       /*
       =====================================================
@@ -613,20 +702,24 @@ io.on(
       =====================================================
       */
 
-
       socket.emit(
         'socket_ready',
         {
-          success:true,
+
+          success:
+            true,
 
           userId,
 
-          role:user.role,
+          role:
+            user.role,
 
           serverTime:
             new Date()
+
         }
       );
+
 
       /*
       =====================================================
@@ -634,17 +727,14 @@ io.on(
       =====================================================
       */
 
-
-      if(
+      if (
         user.role === 'admin'
-      ){
+      ) {
 
-        try{
-
+        try {
 
           const drivers =
             await getOnlineDriverSnapshot();
-
 
 
           socket.emit(
@@ -660,18 +750,17 @@ io.on(
           );
 
 
-        }catch(error){
-
+        } catch (error) {
 
           console.error(
             '[ADMIN SNAPSHOT]',
             error
           );
 
-
         }
 
       }
+
 
       /*
       =====================================================
@@ -679,57 +768,113 @@ io.on(
       =====================================================
       */
 
-
-      if(
+      if (
         user.role === 'driver'
-      ){
+      ) {
 
-        try{
-
+        try {
 
           const profile =
             await DriverProfile.findOne({
 
-              user:user._id
+              user:
+                user._id
 
             })
-            .select(
-              'online verificationStatus vehicleType'
-            );
+              .select(
+                'online verificationStatus vehicleType'
+              );
 
 
-
-
-          if(
+          if (
             profile &&
             profile.online &&
-            profile.verificationStatus === 'approved'
-          ){
+            String(
+              profile.verificationStatus || ''
+            ).toLowerCase() ===
+              'approved'
+          ) {
+
+            const driverRoom =
+              `drivers:online:${profile.vehicleType}`;
 
 
             socket.join(
-
-              `drivers:online:${profile.vehicleType}`
-
+              driverRoom
             );
 
+
+            console.log(
+              '[DRIVER ROOM JOINED]',
+              {
+
+                driver:
+                  user.fullName,
+
+                userId:
+                  String(
+                    user._id
+                  ),
+
+                vehicleType:
+                  profile.vehicleType,
+
+                room:
+                  driverRoom,
+
+                online:
+                  profile.online,
+
+                verificationStatus:
+                  profile.verificationStatus
+
+              }
+            );
+
+
+          } else {
+
+            console.log(
+              '[DRIVER ROOM NOT JOINED]',
+              {
+
+                driver:
+                  user.fullName,
+
+                userId:
+                  String(
+                    user._id
+                  ),
+
+                profileExists:
+                  !!profile,
+
+                online:
+                  profile?.online,
+
+                verificationStatus:
+                  profile?.verificationStatus,
+
+                vehicleType:
+                  profile?.vehicleType
+
+              }
+            );
 
           }
 
 
-
-        }catch(error){
-
+        } catch (error) {
 
           console.error(
             '[DRIVER ROOM]',
             error
           );
 
-
         }
 
       }
+
 
       /*
       =====================================================
@@ -737,23 +882,19 @@ io.on(
       =====================================================
       */
 
-
       socket.on(
-
         'driver:availability',
 
-        async(
-          payload={},
-          ack=()=>{}
-        )=>{
+        async (
+          payload = {},
+          ack = () => {}
+        ) => {
 
+          try {
 
-          try{
-
-
-            if(
+            if (
               user.role !== 'driver'
-            ){
+            ) {
 
               throw new Error(
                 'Driver access required'
@@ -762,66 +903,122 @@ io.on(
             }
 
 
-
-
             const profile =
               await DriverProfile.findOne({
 
-                user:user._id
+                user:
+                  user._id
 
               });
 
 
-
-
-
-            if(
+            if (
               !profile ||
-              profile.verificationStatus !== 'approved'
-            ){
+              String(
+                profile.verificationStatus || ''
+              ).toLowerCase() !==
+                'approved'
+            ) {
 
               throw new Error(
                 'Driver not approved'
               );
 
             }
+
+
             const rooms = [
 
               'bike',
-
               'keke',
-
               'car',
-
               'suv'
 
             ];
-            rooms.forEach(
 
-              vehicle=>{
+
+            rooms.forEach(
+              vehicle => {
 
                 socket.leave(
                   `drivers:online:${vehicle}`
                 );
 
               }
-
             );
 
-            if(
+
+            if (
               profile.online
-            ){
+            ) {
+
+              const driverRoom =
+                `drivers:online:${profile.vehicleType}`;
+
 
               socket.join(
+                driverRoom
+              );
 
-                `drivers:online:${profile.vehicleType}`
 
+              console.log(
+                '[DRIVER AVAILABILITY ROOM JOINED]',
+                {
+
+                  driver:
+                    user.fullName,
+
+                  userId:
+                    String(
+                      user._id
+                    ),
+
+                  vehicleType:
+                    profile.vehicleType,
+
+                  room:
+                    driverRoom,
+
+                  online:
+                    profile.online,
+
+                  verificationStatus:
+                    profile.verificationStatus
+
+                }
+              );
+
+
+            } else {
+
+              console.log(
+                '[DRIVER AVAILABILITY OFFLINE]',
+                {
+
+                  driver:
+                    user.fullName,
+
+                  userId:
+                    String(
+                      user._id
+                    ),
+
+                  vehicleType:
+                    profile.vehicleType,
+
+                  online:
+                    profile.online
+
+                }
               );
 
             }
+
+
             ack({
 
-              success:true,
+              success:
+                true,
 
               online:
                 profile.online,
@@ -830,27 +1027,34 @@ io.on(
                 profile.vehicleType
 
             });
+
+
             await broadcastDriverSnapshot();
 
-          }catch(error){
+
+          } catch (error) {
+
+            console.error(
+              '[DRIVER AVAILABILITY ERROR]',
+              error
+            );
 
 
             ack({
 
-              success:false,
+              success:
+                false,
 
               message:
                 error.message
 
             });
 
-
           }
 
-
         }
-
       );
+
 
       /*
       =====================================================
@@ -859,30 +1063,25 @@ io.on(
       */
 
       socket.on(
-
         'driver:location',
 
-        async(
+        async (
+          payload = {},
+          ack = () => {}
+        ) => {
 
-          payload={},
+          try {
 
-          ack=()=>{}
-
-        )=>{
-
-
-          try{
-
-
-            if(
+            if (
               user.role !== 'driver'
-            ){
+            ) {
 
               throw new Error(
                 'Driver access required'
               );
 
             }
+
 
             const latitude =
               Number(
@@ -895,15 +1094,15 @@ io.on(
                 payload.longitude
               );
 
-            if(
 
-              !Number.isFinite(latitude)
-
-              ||
-
-              !Number.isFinite(longitude)
-
-            ){
+            if (
+              !Number.isFinite(
+                latitude
+              ) ||
+              !Number.isFinite(
+                longitude
+              )
+            ) {
 
               throw new Error(
                 'Invalid coordinates'
@@ -911,24 +1110,59 @@ io.on(
 
             }
 
-            const profile =
 
+            /*
+            =================================================
+            FIND DRIVER'S ACTIVE TRIP
+            =================================================
+            */
+
+            const activeTrip =
+              await Trip.findOne({
+
+                driver:
+                  user._id,
+
+                status: {
+                  $in: [
+                    'DRIVER_ASSIGNED',
+                    'DRIVER_ARRIVING',
+                    'DRIVER_ARRIVED',
+                    'TRIP_STARTED'
+                  ]
+                }
+
+              })
+                .select(
+                  '_id rider status pickup destination'
+                )
+                .lean();
+
+
+            /*
+            =================================================
+            SAVE DRIVER LOCATION
+            =================================================
+            */
+
+            const profile =
               await DriverProfile.findOneAndUpdate(
 
                 {
 
-                  user:user._id,
+                  user:
+                    user._id,
 
-                  verificationStatus:'approved'
+                  verificationStatus:
+                    'approved'
 
                 },
 
-
                 {
 
-                  $set:{
+                  $set: {
 
-                    location:{
+                    location: {
 
                       latitude,
 
@@ -946,57 +1180,111 @@ io.on(
 
                 },
 
-
                 {
 
-                  returnDocument:'after'
+                  returnDocument:
+                    'after'
 
                 }
 
               );
 
-            if(!profile){
 
+            if (!profile) {
 
               throw new Error(
                 'Driver profile unavailable'
               );
+
             }
 
-            emitDriverLocation({
 
-              driverId:
-                user._id,
+          /*
+=================================================
+BROADCAST DRIVER LOCATION
+=================================================
+*/
 
+await emitDriverLocation({
+
+  driverId:
+
+    user._id,
+
+
+  riderId:
+
+    activeTrip?.rider,
+
+
+  tripId:
+
+    activeTrip?._id,
+
+
+  location: {
+
+    latitude,
+
+    longitude,
+
+    accuracy:
+
+      Number.isFinite(
+        Number(
+          payload.accuracy
+        )
+      )
+
+        ? Number(
+            payload.accuracy
+          )
+
+        : null,
+
+  },
+
+
+  driver: {
+
+    _id:
+      user._id,
+
+    fullName:
+      user.fullName,
+
+    phone:
+      user.phone,
+
+  },
+
+
+  trip:
+
+    activeTrip
+
+});
+            /*
+            =================================================
+            ACKNOWLEDGEMENT
+            =================================================
+            */
+
+            ack({
+
+              success:
+                true,
 
               location:
                 profile.location,
 
-              driver:{
-
-                id:
-                  userId,
-
-                name:
-                  user.fullName,
-
-                role:
-                  user.role
-
-              }
+              tripId:
+                activeTrip?._id || null
 
             });
 
-            ack({
 
-              success:true,
-
-              location:
-                profile.location
-
-            });
-
-          }catch(error){
+          } catch (error) {
 
             console.error(
               '[DRIVER LOCATION]',
@@ -1004,23 +1292,21 @@ io.on(
             );
 
 
-
             ack({
 
-              success:false,
+              success:
+                false,
 
               message:
                 error.message
 
             });
 
-
           }
 
-
         }
-
       );
+
 
       /*
       =====================================================
@@ -1028,13 +1314,9 @@ io.on(
       =====================================================
       */
 
-
       socket.on(
-
         'disconnect',
-
-        reason=>{
-
+        reason => {
 
           console.log(
 
@@ -1042,32 +1324,28 @@ io.on(
 
           );
 
-
         }
-
       );
 
-    }catch(error){
 
+    } catch (error) {
 
       console.error(
-
         '[SOCKET CONNECTION ERROR]',
-
         error
-
       );
 
 
-      socket.disconnect(true);
-
+      socket.disconnect(
+        true
+      );
 
     }
 
-
   }
-
 );
+
+
 /* =========================================================
    SERVER STARTUP
 ========================================================= */
@@ -1077,14 +1355,17 @@ const port =
     process.env.PORT
   ) || 5000;
 
+
 const HOST =
   process.env.HOST ||
   '0.0.0.0';
+
 
 connect()
   .then(() => {
 
     initPush();
+
 
     server.listen(
       port,
@@ -1095,13 +1376,16 @@ connect()
           `Kaduna Only API + realtime + push running on http://${HOST}:${port}`
         );
 
+
         console.log(
           `Health check: http://localhost:${port}/api/health`
         );
 
+
         console.log(
           `LAN health check: http://<YOUR-PC-IP>:${port}/api/health`
         );
+
       }
     );
 
@@ -1113,5 +1397,10 @@ connect()
       e
     );
 
-    process.exit(1);
+
+    process.exit(
+      1
+    );
+
   });
+

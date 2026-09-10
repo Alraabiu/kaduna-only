@@ -747,6 +747,28 @@ next(error);
 
 
 
+
+
+async function logout(req,res,next){
+  try {
+    if (req.tokenId) await require('../services/sessionService').revokeSession(req.tokenId);
+    res.json({success:true,message:'Logged out'});
+  } catch(e) { next(e); }
+}
+
+async function refresh(req,res,next){
+  try{
+    const jwtResult=signToken(req.user);
+    await createUserSession({
+      user:req.user,
+      jwtResult,
+      deviceId:req.session?.deviceId || generateBrowserDeviceId(req),
+      req
+    });
+    res.json({success:true,message:'Session refreshed',data:{user:publicUser(req.user),token:jwtResult.token}});
+  }catch(e){next(e)}
+}
+
 async function me(req,res){
 
 res.json({
@@ -769,12 +791,4 @@ publicUser(req.user)
 
 
 
-module.exports = {
-
-register,
-
-login,
-
-me
-
-};
+module.exports = { register, login, refresh, logout, me };

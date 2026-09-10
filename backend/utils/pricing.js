@@ -3,37 +3,30 @@
  * KADUNA ONLY PRICING ENGINE
  * =========================================================
  *
- * IMPORTANT BUSINESS RULE
+ * BUSINESS RULES
  *
- * KEKE:
- *   - Fare is NOT calculated by kilometre.
- *   - Route distance is used only for map display and ETA.
- *   - A Keke has a maximum capacity of 4 passengers.
+ * 1. Admin controls pricing.
+ * 2. Different routes may have different fares.
+ * 3. There is NO commission.
+ * 4. Google/OSRM routing supplies route information only.
+ * 5. Route distance is used for ETA and, where no explicit
+ *    route fare exists, distance-based pricing.
  *
- *   SINGLE SEAT:
- *      ₦500 per passenger/seat
+ * KEKE
  *
- *   PRIVATE KEKE:
- *      ₦2,000 for the entire Keke
+ *   Single seat:
+ *      Uses route-specific singleSeatFare when configured.
+ *      Otherwise uses default singleSeatFare.
  *
- * Examples:
+ *   Private:
+ *      Uses route-specific privateFare when configured.
+ *      Otherwise uses default privateFare.
  *
- *   Malali → Central Market
- *      Single Seat = ₦500
- *      Private      = ₦2,000
+ * OTHER VEHICLES
  *
- *   Kawo → Central Market
- *      Single Seat = ₦500
- *      Private      = ₦2,000
- *
- *   Central Market → Ungwan Rimi
- *      Single Seat = ₦500
- *      Private      = ₦2,000
- *
- * Distance does NOT change these Keke fares.
- *
- * OTHER VEHICLES:
- *   Bike, Car and SUV remain distance-based.
+ *   Bike, Car and SUV:
+ *      Use route-specific fixed fare when configured.
+ *      Otherwise use the existing distance-based formula.
  *
  * =========================================================
  */
@@ -41,7 +34,7 @@
 
 /*
  * ---------------------------------------------------------
- * STANDARD VEHICLE PRICING
+ * DEFAULT PRICING
  * ---------------------------------------------------------
  */
 
@@ -61,12 +54,6 @@ const PRICING = {
 
   },
 
-
-  /*
-   * Keke pricing is intentionally different.
-   *
-   * Do NOT use base/perKm/minimum for Keke.
-   */
 
   keke: {
 
@@ -117,7 +104,7 @@ const PRICING = {
 
 /*
  * ---------------------------------------------------------
- * LOCATION CONFIGURATION
+ * LOCATIONS
  * ---------------------------------------------------------
  */
 
@@ -136,24 +123,7 @@ const LOCATIONS = {
 
 /*
  * ---------------------------------------------------------
- * KEKE RIDE TYPE NORMALISATION
- * ---------------------------------------------------------
- *
- * Allows the frontend to send:
- *
- * single
- * single_seat
- * single-seat
- * single seat
- * private
- * private_ride
- * private-ride
- *
- * Internally everything becomes:
- *
- * single_seat
- * private
- *
+ * NORMALISE KEKE RIDE TYPE
  * ---------------------------------------------------------
  */
 
@@ -167,7 +137,10 @@ function normalizeKekeRideType(
     )
       .trim()
       .toLowerCase()
-      .replace(/[\s-]+/g, '_');
+      .replace(
+        /[\s-]+/g,
+        '_'
+      );
 
 
   if (
@@ -204,10 +177,6 @@ function normalizeKekeRideType(
   }
 
 
-  /*
-   * Default safely to single seat.
-   */
-
   return 'single_seat';
 
 }
@@ -215,7 +184,30 @@ function normalizeKekeRideType(
 
 /*
  * ---------------------------------------------------------
- * SET PRICING CONFIGURATION
+ * NORMALISE LOCATION KEY
+ * ---------------------------------------------------------
+ */
+
+function normalizeLocationKey(
+  value
+) {
+
+  return String(
+    value || ''
+  )
+    .trim()
+    .toLowerCase()
+    .replace(
+      /\s+/g,
+      ' '
+    );
+
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * SET GLOBAL PRICING
  * ---------------------------------------------------------
  */
 
@@ -235,7 +227,9 @@ function setPricingConfig(
     if (
       !config[vehicle]
     ) {
+
       continue;
+
     }
 
 
@@ -254,15 +248,281 @@ function setPricingConfig(
 
 /*
  * ---------------------------------------------------------
+ * ROUTE MATCHING
+ * ---------------------------------------------------------
+ *
+ * Priority:
+ *
+ * 1. Google Place ID pair
+ * 2. Normalised pickup/destination labels
+ *
+ * Direction matters.
+ *
+ * Ghana Road → Kawo
+ *
+ * is different from:
+ *
+ * Kawo → Ghana Road
+ *
+ * unless both are explicitly configured.
+ *
+ * ---------------------------------------------------------
+ */
+
+function findRoutePricing({
+
+  routes = [],
+
+  pickupLabel = '',
+
+  destinationLabel = '',
+
+  pickupPlaceId = null,
+
+  destinationPlaceId = null
+
+} = {}) {
+
+  if (
+    !Array.isArray(routes) ||
+    routes.length === 0
+  ) {
+
+    return null;
+
+  }
+
+
+  const pickupKey =
+    normalizeLocationKey(
+      pickupLabel
+    );
+
+
+  const destinationKey =
+    normalizeLocationKey(
+      destinationLabel
+    );
+
+
+  /*
+   * -------------------------------------------------------
+   * PLACE ID MATCH
+   * -------------------------------------------------------
+   */
+
+  if (
+    pickupPlaceId &&
+    destinationPlaceId
+  ) {
+
+    const placeMatch =
+      routes.find(
+        route =>
+
+          route?.active !== false &&
+
+          route?.pickupPlaceId ===
+            pickupPlaceId &&
+
+          route?.destinationPlaceId ===
+            destinationPlaceId
+
+      );
+
+
+    if (
+      placeMatch
+    ) {
+
+      return placeMatch;
+
+    }
+
+  }
+
+
+  /*
+   * -------------------------------------------------------
+   * LABEL MATCH
+   * -------------------------------------------------------
+   */
+
+  const labelMatch =
+    routes.find(
+      route =>
+
+        route?.active !== false &&
+
+        normalizeLocationKey(
+          route?.pickupKey ||
+          route?.pickupLabel
+        ) ===
+          pickupKey &&
+
+        normalizeLocationKey(
+          route?.destinationKey ||
+          route?.destinationLabel
+        ) ===
+          destinationKey
+
+    );
+
+
+  return labelMatch || null;
+
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * ROUND FARE
+ * ---------------------------------------------------------
+ */
+
+function roundFare(
+  value
+) {
+
+  const number =
+    Number(
+      value
+    );
+
+
+  if (
+    !Number.isFinite(
+      number
+    )
+  ) {
+
+    return 0;
+
+  }
+
+
+  return (
+    Math.ceil(
+      number / 50
+    ) * 50
+  );
+
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * ETA
+ * ---------------------------------------------------------
+ */
+
+function calculateEstimatedMinutes({
+
+  distanceKm,
+
+  durationMinutes,
+
+  avgKph,
+
+  etaFactor
+
+}) {
+
+  const distance =
+    Number(
+      distanceKm
+    );
+
+
+  const duration =
+    Number(
+      durationMinutes
+    );
+
+
+  const speed =
+    Number(
+      avgKph
+    );
+
+
+  const factor =
+    Number(
+      etaFactor
+    );
+
+
+  const validFactor =
+    Number.isFinite(
+      factor
+    ) &&
+    factor > 0
+      ? factor
+      : 1;
+
+
+  const fallbackDuration =
+    Number.isFinite(
+      distance
+    ) &&
+    distance > 0 &&
+    Number.isFinite(
+      speed
+    ) &&
+    speed > 0
+
+      ? (
+          distance *
+          60 /
+          speed
+        )
+
+      : 10;
+
+
+  const baseDuration =
+    Number.isFinite(
+      duration
+    ) &&
+    duration > 0
+
+      ? duration
+
+      : fallbackDuration;
+
+
+  return Math.max(
+
+    3,
+
+    Math.ceil(
+      baseDuration *
+      validFactor
+    )
+
+  );
+
+}
+
+
+/*
+ * ---------------------------------------------------------
  * KEKE QUOTE
  * ---------------------------------------------------------
  */
 
 function quoteKeke({
+
   distanceKm,
+
   durationMinutes,
+
   kekeRideType = 'single_seat',
-  source = 'osrm'
+
+  source = 'osrm',
+
+  routePricing = null
+
 }) {
 
   const price =
@@ -284,10 +544,6 @@ function quoteKeke({
   }
 
 
-  /*
-   * Normalise requested ride type.
-   */
-
   const rideType =
     normalizeKekeRideType(
       kekeRideType
@@ -296,38 +552,112 @@ function quoteKeke({
 
   /*
    * -------------------------------------------------------
-   * FIXED KEKE FARE
+   * ROUTE-SPECIFIC FARE
    * -------------------------------------------------------
    */
 
   let fare;
 
+  let pricingBasis;
+
 
   if (
-    rideType === 'private'
+    routePricing?.keke
   ) {
 
-    fare =
-      Number(
-        price.privateFare
-      );
+    if (
+      routePricing.keke.enabled === false
+    ) {
 
-  } else {
+      const error =
+        new Error(
+          'Keke service is not available on this route'
+        );
 
-    fare =
-      Number(
-        price.singleSeatFare
-      );
+      error.statusCode =
+        400;
+
+      throw error;
+
+    }
+
+
+    if (
+      rideType === 'private'
+    ) {
+
+      fare =
+        Number(
+          routePricing.keke.privateFare
+        );
+
+    } else {
+
+      fare =
+        Number(
+          routePricing.keke.singleSeatFare
+        );
+
+    }
+
+
+    if (
+      !Number.isFinite(
+        fare
+      ) ||
+      fare <= 0
+    ) {
+
+      fare =
+        rideType === 'private'
+
+          ? Number(
+              price.privateFare
+            )
+
+          : Number(
+              price.singleSeatFare
+            );
+
+    }
+
+
+    pricingBasis =
+      'route_fixed';
 
   }
 
 
   /*
-   * Validate fare configuration.
+   * -------------------------------------------------------
+   * DEFAULT KEKE FARE
+   * -------------------------------------------------------
    */
 
+  else {
+
+    fare =
+      rideType === 'private'
+
+        ? Number(
+            price.privateFare
+          )
+
+        : Number(
+            price.singleSeatFare
+          );
+
+
+    pricingBasis =
+      'default_fixed';
+
+  }
+
+
   if (
-    !Number.isFinite(fare) ||
+    !Number.isFinite(
+      fare
+    ) ||
     fare <= 0
   ) {
 
@@ -344,15 +674,21 @@ function quoteKeke({
   }
 
 
-  /*
-   * -------------------------------------------------------
-   * ETA
-   * -------------------------------------------------------
-   *
-   * Distance is NOT used for fare.
-   *
-   * It is used only to calculate/display ETA.
-   */
+  const estimatedMinutes =
+    calculateEstimatedMinutes({
+
+      distanceKm,
+
+      durationMinutes,
+
+      avgKph:
+        price.avgKph,
+
+      etaFactor:
+        price.etaFactor
+
+    });
+
 
   const distance =
     Number(
@@ -360,59 +696,30 @@ function quoteKeke({
     );
 
 
-  const duration =
-    Number(
-      durationMinutes
-    );
-
-
-  const estimatedMinutes =
-    Math.max(
-
-      3,
-
-      Math.ceil(
-
-        (
-          Number.isFinite(duration) &&
-          duration > 0
-
-            ? duration
-
-            : (
-                Number.isFinite(distance) &&
-                distance > 0
-
-                  ? distance *
-                    60 /
-                    price.avgKph
-
-                  : 10
-              )
-
-        ) *
-
-        price.etaFactor
-
-      )
-
-    );
-
-
   return {
 
     distanceKm:
-      Number.isFinite(distance)
+
+      Number.isFinite(
+        distance
+      )
+
         ? Number(
             distance.toFixed(1)
           )
+
         : 0,
 
 
     estimatedMinutes,
 
 
-    fare,
+    fare:
+
+
+      Math.round(
+        fare
+      ),
 
 
     currency:
@@ -420,11 +727,12 @@ function quoteKeke({
 
 
     pricingVersion:
-      'kaduna-keke-fixed-v2',
+      routePricing
+        ? 'kaduna-route-v3'
+        : 'kaduna-keke-v3',
 
 
-    pricingBasis:
-      'fixed_per_passenger',
+    pricingBasis,
 
 
     vehicleType:
@@ -437,30 +745,37 @@ function quoteKeke({
 
     passengerCapacity:
       Number(
-        price.capacity || 4
+        routePricing?.keke?.capacity ||
+        price.capacity ||
+        4
       ),
 
 
     farePerPassenger:
       Number(
+        routePricing?.keke?.singleSeatFare ||
         price.singleSeatFare
       ),
 
 
     singleSeatFare:
       Number(
+        routePricing?.keke?.singleSeatFare ||
         price.singleSeatFare
       ),
 
 
     privateFare:
       Number(
+        routePricing?.keke?.privateFare ||
         price.privateFare
       ),
 
 
     routingSource:
-      source
+      normalizeRoutingSource(
+        source
+      )
 
   };
 
@@ -474,14 +789,23 @@ function quoteKeke({
  */
 
 function quoteDistanceBasedVehicle({
+
   distanceKm,
+
   durationMinutes,
+
   vehicleType,
-  source = 'osrm'
+
+  source = 'osrm',
+
+  routePricing = null
+
 }) {
 
   const price =
-    PRICING[vehicleType];
+    PRICING[
+      vehicleType
+    ];
 
 
   if (!price) {
@@ -505,14 +829,10 @@ function quoteDistanceBasedVehicle({
     );
 
 
-  const duration =
-    Number(
-      durationMinutes
-    );
-
-
   if (
-    !Number.isFinite(distance) ||
+    !Number.isFinite(
+      distance
+    ) ||
     distance <= 0
   ) {
 
@@ -529,62 +849,143 @@ function quoteDistanceBasedVehicle({
   }
 
 
+  const estimatedMinutes =
+    calculateEstimatedMinutes({
+
+      distanceKm:
+
+        distance,
+
+      durationMinutes,
+
+      avgKph:
+        price.avgKph,
+
+      etaFactor:
+        price.etaFactor
+
+    });
+
+
   /*
    * -------------------------------------------------------
-   * ETA
+   * ROUTE-SPECIFIC FIXED FARE
    * -------------------------------------------------------
    */
 
-  const estimatedMinutes =
-    Math.max(
+  if (
+    routePricing?.[vehicleType]
+  ) {
 
-      3,
+    const routeVehicle =
+      routePricing[
+        vehicleType
+      ];
 
-      Math.ceil(
 
-        (
-          Number.isFinite(duration) &&
-          duration > 0
+    if (
+      routeVehicle.enabled === false
+    ) {
 
-            ? duration
+      const error =
+        new Error(
+          `${vehicleType} service is not available on this route`
+        );
 
-            : (
-                distance *
-                60 /
-                price.avgKph
-              )
+      error.statusCode =
+        400;
 
-        ) *
+      throw error;
 
-        price.etaFactor
+    }
 
-      )
 
-    );
+    const routeFare =
+      Number(
+        routeVehicle.fare
+      );
+
+
+    if (
+      Number.isFinite(
+        routeFare
+      ) &&
+      routeFare > 0
+    ) {
+
+      return {
+
+        distanceKm:
+          Number(
+            distance.toFixed(1)
+          ),
+
+
+        estimatedMinutes,
+
+
+        fare:
+          Math.round(
+            routeFare
+          ),
+
+
+        currency:
+          'NGN',
+
+
+        pricingVersion:
+          'kaduna-route-v3',
+
+
+        pricingBasis:
+          'route_fixed',
+
+
+        vehicleType,
+
+
+        routingSource:
+          normalizeRoutingSource(
+            source
+          )
+
+      };
+
+    }
+
+  }
 
 
   /*
    * -------------------------------------------------------
-   * FARE
+   * DEFAULT DISTANCE-BASED FARE
    * -------------------------------------------------------
    */
 
   const rawFare =
     Math.max(
 
-      price.minimum,
+      Number(
+        price.minimum
+      ),
 
-      price.base +
+      Number(
+        price.base
+      ) +
+
       distance *
-      price.perKm
+      Number(
+        price.perKm
+      )
 
     );
 
 
   const fare =
-    Math.ceil(
-      rawFare / 50
-    ) * 50;
+    roundFare(
+      rawFare
+    );
 
 
   return {
@@ -606,7 +1007,7 @@ function quoteDistanceBasedVehicle({
 
 
     pricingVersion:
-      'kaduna-osm-v2',
+      'kaduna-distance-v3',
 
 
     pricingBasis:
@@ -617,9 +1018,86 @@ function quoteDistanceBasedVehicle({
 
 
     routingSource:
-      source
+      normalizeRoutingSource(
+        source
+      )
 
   };
+
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * ROUTING SOURCE NORMALISATION
+ * ---------------------------------------------------------
+ *
+ * Trip.js currently accepts:
+ *
+ *   osrm
+ *   estimate
+ *
+ * Google is used for route discovery, but the Trip schema
+ * does not currently accept "google".
+ *
+ * Therefore Google is mapped to the supported value
+ * "estimate" for database compatibility.
+ *
+ * ---------------------------------------------------------
+ */
+
+function normalizeRoutingSource(
+  source
+) {
+
+  const value =
+    String(
+      source || ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  if (
+    value === 'osrm'
+  ) {
+
+    return 'osrm';
+
+  }
+
+
+  if (
+    value === 'estimate'
+  ) {
+
+    return 'estimate';
+
+  }
+
+
+  /*
+   * Google routing is authoritative for the current
+   * route calculation, but Trip.routingSource currently
+   * only permits osrm/estimate.
+   *
+   * Until the Trip schema is deliberately upgraded,
+   * store it as estimate rather than causing validation
+   * failure.
+   */
+
+  if (
+    value === 'google' ||
+    value === 'google_maps' ||
+    value === 'googlemaps'
+  ) {
+
+    return 'estimate';
+
+  }
+
+
+  return 'estimate';
 
 }
 
@@ -640,7 +1118,17 @@ function quoteFromRoute({
 
   kekeRideType = 'single_seat',
 
-  source = 'osrm'
+  source = 'osrm',
+
+  pickupLabel = '',
+
+  destinationLabel = '',
+
+  pickupPlaceId = null,
+
+  destinationPlaceId = null,
+
+  routes = []
 
 }) {
 
@@ -652,13 +1140,56 @@ function quoteFromRoute({
       .toLowerCase();
 
 
+  if (
+    ![
+      'bike',
+      'keke',
+      'car',
+      'suv'
+    ].includes(
+      normalizedVehicleType
+    )
+  ) {
+
+    const error =
+      new Error(
+        'Unsupported vehicle type'
+      );
+
+    error.statusCode =
+      400;
+
+    throw error;
+
+  }
+
+
+  /*
+   * -------------------------------------------------------
+   * FIND ROUTE-SPECIFIC PRICING
+   * -------------------------------------------------------
+   */
+
+  const routePricing =
+    findRoutePricing({
+
+      routes,
+
+      pickupLabel,
+
+      destinationLabel,
+
+      pickupPlaceId,
+
+      destinationPlaceId
+
+    });
+
+
   /*
    * -------------------------------------------------------
    * KEKE
    * -------------------------------------------------------
-   *
-   * Keke is deliberately separated from the
-   * distance-based pricing engine.
    */
 
   if (
@@ -673,7 +1204,9 @@ function quoteFromRoute({
 
       kekeRideType,
 
-      source
+      source,
+
+      routePricing
 
     });
 
@@ -695,7 +1228,9 @@ function quoteFromRoute({
     vehicleType:
       normalizedVehicleType,
 
-    source
+    source,
+
+    routePricing
 
   });
 
@@ -721,6 +1256,12 @@ module.exports = {
   quoteDistanceBasedVehicle,
 
   normalizeKekeRideType,
+
+  normalizeLocationKey,
+
+  findRoutePricing,
+
+  normalizeRoutingSource,
 
   setPricingConfig
 

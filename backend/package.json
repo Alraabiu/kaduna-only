@@ -1,1 +1,20 @@
-{"scripts":{"dev":"nodemon server.js","start":"node server.js","seed":"node seed/seed.js"},"dependencies":{"bcryptjs":"latest","cors":"latest","dotenv":"latest","express":"latest","jsonwebtoken":"latest","mongoose":"latest","morgan":"latest","nodemon":"latest","socket.io":"latest","firebase-admin":"^13.4.0"}}
+{
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "create-admin": "node create-admin.js"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.3",
+    "cors": "2.8.6",
+    "dotenv": "17.4.2",
+    "express": "5.2.1",
+    "firebase-admin": "13.10.0",
+    "jsonwebtoken": "9.0.3",
+    "mongoose": "9.9.3",
+    "morgan": "1.11.0",
+    "multer": "^2.3.0",
+    "nodemon": "3.1.14",
+    "socket.io": "4.8.3"
+  }
+}

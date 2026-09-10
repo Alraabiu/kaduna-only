@@ -2,24 +2,25 @@ const User = require('../models/User');
 const Trip = require('../models/Trip');
 const DriverProfile = require('../models/DriverProfile');
 const Wallet = require('../models/Wallet');
+const Payment = require('../models/Payment');
 
-const { refundRiderWallet } =
-  require('../services/tripPaymentService');
-
-const { PRICING, LOCATIONS } =
-  require('../utils/pricing');
+const Withdrawal = require('../models/Withdrawal');
 
 const {
-  flatCommission
-} =
-  require('../services/platformCommissionService');
+  refundRiderWallet
+} = require('../services/tripPaymentService');
 
 const {
   getPricingConfig,
   updatePricingConfig
-} =
-  require('../services/pricingConfigService');
+} = require('../services/pricingConfigService');
 
+
+/*
+=========================================================
+ACTIVE TRIP STATUSES
+=========================================================
+*/
 
 const activeStatuses = [
   'SEARCHING_DRIVER',
@@ -30,33 +31,25 @@ const activeStatuses = [
 ];
 
 
-/* =========================================================
-   ADMIN DASHBOARD
-========================================================= */
+/*
+=========================================================
+ADMIN DASHBOARD
+=========================================================
+*/
 
-async function dashboard(req,res,next){
+async function dashboard(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const now=new Date();
-
-    const startToday=new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
-
-    const startMonth=new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1
-    );
-
-
-    const[
+    const [
       users,
       riders,
       drivers,
+      staffOperations,
       totalTrips,
       activeTrips,
       completedTrips,
@@ -64,239 +57,139 @@ async function dashboard(req,res,next){
       pendingDrivers,
       onlineDrivers,
       grossFare,
-      platformRevenue,
-      todayRevenue,
-      monthRevenue,
-      dueCommission,
-      recentTrips
-    ]=await Promise.all([
+      recentTrips,
+      pendingWithdrawals
+    ] = await Promise.all([
 
       User.countDocuments(),
 
       User.countDocuments({
-        role:'rider'
+        role: 'rider'
       }),
 
       User.countDocuments({
-        role:'driver'
+        role: 'driver'
+      }),
+
+      User.countDocuments({
+        role: 'staff_operations'
       }),
 
       Trip.countDocuments(),
 
       Trip.countDocuments({
-        status:{
-          $in:activeStatuses
+        status: {
+          $in: activeStatuses
         }
       }),
 
       Trip.countDocuments({
-        status:'TRIP_COMPLETED'
+        status: 'TRIP_COMPLETED'
       }),
 
       Trip.countDocuments({
-        status:'CANCELLED'
+        status: 'CANCELLED'
       }),
 
       DriverProfile.countDocuments({
-        verificationStatus:'pending'
+        verificationStatus: 'pending'
       }),
 
       DriverProfile.countDocuments({
-        verificationStatus:'approved',
-        online:true
+        verificationStatus: 'approved',
+        online: true
       }),
 
       Trip.aggregate([
-        {
-          $match:{
-            status:'TRIP_COMPLETED'
-          }
-        },
-        {
-          $group:{
-            _id:null,
-            total:{
-              $sum:{
-                $convert:{
-                  input:'$fare',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            }
-          }
-        }
-      ]),
 
-      Trip.aggregate([
         {
-          $match:{
-            status:'TRIP_COMPLETED',
-            commissionStatus:'collected'
+          $match: {
+            status: 'TRIP_COMPLETED'
           }
         },
-        {
-          $group:{
-            _id:null,
-            total:{
-              $sum:{
-                $convert:{
-                  input:'$platformCommission',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            }
-          }
-        }
-      ]),
 
-      Trip.aggregate([
         {
-          $match:{
-            status:'TRIP_COMPLETED',
-            commissionStatus:'collected',
-            commissionCollectedAt:{
-              $gte:startToday
-            }
-          }
-        },
-        {
-          $group:{
-            _id:null,
-            total:{
-              $sum:{
-                $convert:{
-                  input:'$platformCommission',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            }
-          }
-        }
-      ]),
+          $group: {
+            _id: null,
 
-      Trip.aggregate([
-        {
-          $match:{
-            status:'TRIP_COMPLETED',
-            commissionStatus:'collected',
-            commissionCollectedAt:{
-              $gte:startMonth
-            }
-          }
-        },
-        {
-          $group:{
-            _id:null,
-            total:{
-              $sum:{
-                $convert:{
-                  input:'$platformCommission',
-                  to:'double',
-                  onError:0,
-                  onNull:0
+            total: {
+              $sum: {
+                $convert: {
+                  input: '$fare',
+                  to: 'double',
+                  onError: 0,
+                  onNull: 0
                 }
               }
             }
           }
         }
-      ]),
 
-      Trip.aggregate([
-        {
-          $match:{
-            status:'TRIP_COMPLETED',
-            commissionStatus:'due'
-          }
-        },
-        {
-          $group:{
-            _id:null,
-            total:{
-              $sum:{
-                $convert:{
-                  input:'$platformCommission',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            },
-            count:{
-              $sum:1
-            }
-          }
-        }
       ]),
 
       Trip.find()
+
         .populate(
           'rider',
           'fullName phone'
         )
+
         .populate(
           'driver',
           'fullName phone'
         )
+
         .sort({
-          createdAt:-1
+          createdAt: -1
         })
-        .limit(8)
+
+        .limit(8),
+
+      Withdrawal.countDocuments({
+        status: {
+          $in: [
+            'pending',
+            'approved'
+          ]
+        }
+      })
 
     ]);
 
 
-    res.json({
+    return res.json({
 
-      success:true,
+      success: true,
 
-      data:{
+      data: {
 
-        stats:{
+        stats: {
 
           users,
+
           riders,
+
           drivers,
 
-          trips:totalTrips,
+          staffOperations,
+
+          trips:
+            totalTrips,
 
           activeTrips,
+
           completedTrips,
+
           cancelledTrips,
 
           pendingDrivers,
+
           onlineDrivers,
 
           grossFare:
-            grossFare[0]?.total||0,
+            grossFare[0]?.total || 0,
 
-          revenue:
-            platformRevenue[0]?.total||0,
-
-          todayRevenue:
-            todayRevenue[0]?.total||0,
-
-          monthRevenue:
-            monthRevenue[0]?.total||0,
-
-          dueCommission:
-            dueCommission[0]?.total||0,
-
-          dueCommissionTrips:
-            dueCommission[0]?.count||0,
-
-          /*
-           * Informational configuration value only.
-           * It must never be used to calculate historical
-           * trip revenue.
-           */
-          flatCommission:
-            flatCommission()
+          pendingWithdrawals
 
         },
 
@@ -306,7 +199,7 @@ async function dashboard(req,res,next){
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -315,104 +208,158 @@ async function dashboard(req,res,next){
 }
 
 
-/* =========================================================
-   USERS
-========================================================= */
+/*
+=========================================================
+USERS
+=========================================================
+*/
 
-async function users(req,res,next){
+async function users(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const page=Math.max(
-      1,
-      Number(req.query.page)||1
-    );
-
-    const limit=Math.min(
-      100,
+    const page =
       Math.max(
         1,
-        Number(req.query.limit)||25
-      )
-    );
-
-    const q={};
+        Number(req.query.page) || 1
+      );
 
 
-    if(
-      req.query.role&&
+    const limit =
+      Math.min(
+        100,
+        Math.max(
+          1,
+          Number(req.query.limit) || 25
+        )
+      );
+
+
+    const q = {};
+
+
+    /*
+    -------------------------------------------------------
+    ROLE FILTER
+    -------------------------------------------------------
+    */
+
+    if (
+
       [
         'rider',
         'driver',
-        'admin'
-      ].includes(req.query.role)
-    ){
+        'admin',
+        'staff_operations'
+      ].includes(
+        req.query.role
+      )
 
-      q.role=req.query.role;
+    ) {
+
+      q.role =
+        req.query.role;
 
     }
 
 
-    if(
-      req.query.status&&
+    /*
+    -------------------------------------------------------
+    STATUS FILTER
+    -------------------------------------------------------
+    */
+
+    if (
+
       [
         'active',
         'suspended'
-      ].includes(req.query.status)
-    ){
+      ].includes(
+        req.query.status
+      )
 
-      q.status=req.query.status;
+    ) {
 
-    }
-
-
-    if(req.query.search){
-
-      const s=req.query.search.trim();
-
-      q.$or=[
-
-        {
-          fullName:{
-            $regex:s,
-            $options:'i'
-          }
-        },
-
-        {
-          phone:{
-            $regex:s,
-            $options:'i'
-          }
-        },
-
-        {
-          email:{
-            $regex:s,
-            $options:'i'
-          }
-        }
-
-      ];
+      q.status =
+        req.query.status;
 
     }
 
 
-    const[
+    /*
+    -------------------------------------------------------
+    SEARCH
+    -------------------------------------------------------
+    */
+
+    if (
+      req.query.search
+    ) {
+
+      const search =
+        String(
+          req.query.search
+        ).trim();
+
+
+      if (search) {
+
+        q.$or = [
+
+          {
+            fullName:
+              new RegExp(
+                search,
+                'i'
+              )
+          },
+
+          {
+            phone:
+              new RegExp(
+                search,
+                'i'
+              )
+          },
+
+          {
+            email:
+              new RegExp(
+                search,
+                'i'
+              )
+          }
+
+        ];
+
+      }
+
+    }
+
+
+    const [
       items,
       total
-    ]=await Promise.all([
+    ] = await Promise.all([
 
       User.find(q)
+
         .select(
           'fullName phone email role status createdAt'
         )
+
         .sort({
-          createdAt:-1
+          createdAt: -1
         })
+
         .skip(
-          (page-1)*limit
+          (page - 1) * limit
         )
+
         .limit(limit),
 
       User.countDocuments(q)
@@ -420,28 +367,31 @@ async function users(req,res,next){
     ]);
 
 
-    res.json({
+    return res.json({
 
-      success:true,
+      success: true,
 
-      data:{
+      data: {
 
-        users:items,
+        users:
+          items,
 
-        pagination:{
-          page,
-          limit,
-          total,
-          pages:Math.ceil(
-            total/limit
+        total,
+
+        page,
+
+        limit,
+
+        pages:
+          Math.ceil(
+            total / limit
           )
-        }
 
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -450,103 +400,128 @@ async function users(req,res,next){
 }
 
 
-/* =========================================================
-   USER STATUS
-========================================================= */
+/*
+=========================================================
+CHANGE USER STATUS
+=========================================================
+*/
 
-async function setUserStatus(req,res,next){
+async function setUserStatus(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const status=req.body.status;
+    const status =
+      req.body.status;
 
 
-    if(
+    if (
       ![
         'active',
         'suspended'
       ].includes(status)
-    ){
+    ) {
 
       return res.status(400).json({
 
-        success:false,
+        success: false,
 
         message:
-          'Status must be active or suspended'
+          'Invalid account status'
 
       });
 
     }
 
 
-    if(
-      String(req.params.id)===
-      String(req.user._id)&&
-      status==='suspended'
-    ){
+    /*
+    -------------------------------------------------------
+    PREVENT ADMIN FROM SUSPENDING THEMSELVES
+    -------------------------------------------------------
+    */
+
+    if (
+      String(req.params.id) ===
+      String(req.user._id)
+    ) {
 
       return res.status(400).json({
 
-        success:false,
+        success: false,
 
         message:
-          'You cannot suspend your own admin account'
+          'You cannot change your own account status'
 
       });
 
     }
 
 
-    const user=
+    const user =
       await User.findByIdAndUpdate(
 
         req.params.id,
 
         {
-          $set:{
+          $set: {
             status
           }
         },
 
         {
-          new:true,
-          runValidators:true
+          new: true
         }
 
       ).select(
-        'fullName phone email role status createdAt'
+        'fullName phone email role status'
       );
 
 
-    if(!user){
+    if (!user) {
 
       return res.status(404).json({
 
-        success:false,
+        success: false,
 
-        message:'User not found'
+        message:
+          'User not found'
 
       });
 
     }
 
 
-    if(
-      user.role==='driver'&&
-      status==='suspended'
-    ){
+    /*
+    -------------------------------------------------------
+    DRIVER SUSPENSION
+    -------------------------------------------------------
+    */
 
-      await DriverProfile.findOneAndUpdate(
+    if (
+
+      user.role === 'driver' &&
+      status === 'suspended'
+
+    ) {
+
+      await DriverProfile.updateOne(
 
         {
-          user:user._id
+          user:
+            user._id
         },
 
         {
-          $set:{
-            online:false,
-            verificationStatus:'suspended'
+          $set: {
+
+            online: false,
+
+            verificationStatus:
+              'suspended'
+
           }
         }
 
@@ -555,20 +530,22 @@ async function setUserStatus(req,res,next){
     }
 
 
-    res.json({
+    return res.json({
 
-      success:true,
+      success: true,
 
       message:
         `Account ${status}`,
 
-      data:{
+      data: {
+
         user
+
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -577,63 +554,111 @@ async function setUserStatus(req,res,next){
 }
 
 
-/* =========================================================
-   DRIVERS
-========================================================= */
+/*
+=========================================================
+DRIVERS
+=========================================================
+*/
 
-async function drivers(req,res,next){
+async function drivers(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const q={};
+    const q = {};
 
 
-    if(req.query.status){
+    if (
 
-      q.verificationStatus=
+      [
+        'pending',
+        'approved',
+        'rejected',
+        'suspended'
+      ].includes(
+        req.query.status
+      )
+
+    ) {
+
+      q.verificationStatus =
         req.query.status;
 
     }
 
 
-    if(req.query.online==='true'){
+    if (
+      req.query.online === 'true'
+    ) {
 
-      q.online=true;
-
-    }
-
-
-    if(req.query.online==='false'){
-
-      q.online=false;
+      q.online = true;
 
     }
 
 
-    const items=
-      await DriverProfile.find(q)
+    if (
+      req.query.online === 'false'
+    ) {
 
-        .populate(
-          'user',
+      q.online = false;
+
+    }
+
+
+    const items =
+  await DriverProfile.find(q)
+
+    .populate(
+      {
+        path: 'user',
+        select:
           'fullName phone email role status createdAt'
-        )
+      }
+    )
 
-        .sort({
-          createdAt:-1
-        });
+    .select(
+      `
+      user
+      verificationStatus
+      driverImage
+      vehicleType
+      vehicleMake
+      vehicleModel
+      vehicleColor
+      plateNumber
+      driverLicenceNumber
+      licenseDocument
+      vehicleDocument
+      identityDocument
+      rating
+      totalTrips
+      online
+      createdAt
+      `
+    )
+
+    .sort({
+      createdAt: -1
+    });
 
 
-    res.json({
+    return res.json({
 
-      success:true,
+      success: true,
 
-      data:{
-        drivers:items
+      data: {
+
+        drivers:
+          items
+
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -642,25 +667,34 @@ async function drivers(req,res,next){
 }
 
 
-/* =========================================================
-   DRIVER VERIFICATION
-========================================================= */
+/*
+=========================================================
+VERIFY DRIVER
+=========================================================
+*/
 
-async function verifyDriver(req,res,next){
+async function verifyDriver(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const allowed=[
-      'pending',
-      'approved',
-      'rejected',
-      'suspended'
-    ];
-
-    const status=req.body.status;
+    const status =
+      req.body.status;
 
 
-    if(!allowed.includes(status)){
+    if (
+
+      ![
+        'pending',
+        'approved',
+        'rejected',
+        'suspended'
+      ].includes(status)
+
+    ) {
 
       return res.status(400).json({
 
@@ -674,30 +708,13 @@ async function verifyDriver(req,res,next){
     }
 
 
-    const profile=
-      await DriverProfile.findByIdAndUpdate(
-
-        req.params.id,
-
-        {
-          $set:{
-            verificationStatus:status,
-            online:false
-          }
-        },
-
-        {
-          new:true,
-          runValidators:true
-        }
-
-      ).populate(
-        'user',
-        'fullName phone email role status'
+    const existingProfile =
+      await DriverProfile.findById(
+        req.params.id
       );
 
 
-    if(!profile){
+    if (!existingProfile) {
 
       return res.status(404).json({
 
@@ -711,7 +728,245 @@ async function verifyDriver(req,res,next){
     }
 
 
-    res.json({
+    /*
+    -------------------------------------------------------
+    REQUIRE DRIVER DOCUMENTS BEFORE APPROVAL
+    -------------------------------------------------------
+    */
+
+    if (
+      status === 'approved'
+    ) {
+
+
+      const missingFields = [];
+
+
+      if (
+        !existingProfile.plateNumber
+      ) {
+
+        missingFields.push(
+          'plate number'
+        );
+
+      }
+
+
+      if (
+        !existingProfile.vehicleMake
+      ) {
+
+        missingFields.push(
+          'vehicle make'
+        );
+
+      }
+
+
+      if (
+        !existingProfile.driverLicenceNumber
+      ) {
+
+        missingFields.push(
+          'driver licence number'
+        );
+
+      }
+
+
+      if (
+        !existingProfile.driverImage
+      ) {
+
+        missingFields.push(
+          'driver image'
+        );
+
+      }
+
+
+      if (
+        missingFields.length > 0
+      ) {
+
+        return res.status(400).json({
+
+          success:false,
+
+          message:
+            `Driver cannot be approved. Missing: ${missingFields.join(', ')}`
+
+        });
+
+      }
+
+    }
+
+
+    /*
+=========================================================
+CREATE STAFF ACCOUNT
+=========================================================
+*/
+
+async function createStaff(
+  req,
+  res,
+  next
+){
+
+try{
+
+
+const {
+  fullName,
+  phone,
+  email,
+  password,
+  role
+}=req.body;
+
+const User =
+require('../models/User');
+
+
+
+const exists =
+await User.findOne({
+
+$or:[
+{
+ phone
+},
+{
+ email
+}
+]
+
+});
+
+
+
+if(exists){
+
+return res.status(400).json({
+
+success:false,
+
+message:
+'User already exists'
+
+});
+
+}
+
+
+
+const bcrypt =
+require('bcryptjs');
+
+
+const hashed =
+await bcrypt.hash(
+password,
+12
+);
+
+
+const staff =
+
+await User.create({
+
+fullName,
+
+phone,
+
+email,
+
+passwordHash:
+
+hashed,
+
+role,
+
+status:
+
+'active'
+
+});
+
+
+return res.status(201).json({
+
+success:true,
+
+message:
+'Staff account created',
+
+data:{
+staff
+}
+
+});
+
+
+}
+catch(error){
+
+next(error);
+
+}
+
+}
+
+
+    /*
+    -------------------------------------------------------
+    UPDATE DRIVER STATUS
+    -------------------------------------------------------
+    */
+
+    const profile =
+      await DriverProfile.findByIdAndUpdate(
+
+        req.params.id,
+
+        {
+
+          $set: {
+
+            verificationStatus:
+              status,
+
+            online:
+              false
+
+          }
+
+        },
+
+        {
+
+          new:true,
+
+          runValidators:true
+
+        }
+
+      )
+
+      .populate(
+
+        'user',
+
+        'fullName phone email role status'
+
+      );
+
+
+
+    return res.json({
 
       success:true,
 
@@ -719,71 +974,88 @@ async function verifyDriver(req,res,next){
         `Driver ${status}`,
 
       data:{
+
         profile
+
       }
 
     });
 
-  }catch(e){
 
-    next(e);
+
+  } catch(error) {
+
+    next(error);
 
   }
 
 }
+/*
+TRIPS
+*/
 
+async function trips(
+  req,
+  res,
+  next
+) {
 
-/* =========================================================
-   TRIPS
-========================================================= */
+  try {
 
-async function trips(req,res,next){
-
-  try{
-
-    const page=Math.max(
-      1,
-      Number(req.query.page)||1
-    );
-
-    const limit=Math.min(
-      100,
+    const page =
       Math.max(
         1,
-        Number(req.query.limit)||30
-      )
-    );
-
-    const q={};
+        Number(req.query.page) || 1
+      );
 
 
-    if(req.query.status){
+    const limit =
+      Math.min(
+        100,
+        Math.max(
+          1,
+          Number(req.query.limit) || 30
+        )
+      );
 
-      q.status=req.query.status;
+
+    const q = {};
+
+
+    if (
+      req.query.status
+    ) {
+
+      q.status =
+        req.query.status;
 
     }
 
 
-    if(req.query.paymentMethod){
+    if (
+      req.query.paymentMethod
+    ) {
 
-      q.paymentMethod=
+      q.paymentMethod =
         req.query.paymentMethod;
 
     }
 
 
-    if(req.query.vehicleType){
+    if (
+      req.query.vehicleType
+    ) {
 
-      q.vehicleType=
+      q.vehicleType =
         req.query.vehicleType;
 
     }
 
 
-    const[
+    const [
       items,
       total
-    ]=await Promise.all([
+    ] = await Promise.all([
 
       Trip.find(q)
 
@@ -798,11 +1070,11 @@ async function trips(req,res,next){
         )
 
         .sort({
-          createdAt:-1
+          createdAt: -1
         })
 
         .skip(
-          (page-1)*limit
+          (page - 1) * limit
         )
 
         .limit(limit),
@@ -812,28 +1084,31 @@ async function trips(req,res,next){
     ]);
 
 
-    res.json({
+    return res.json({
 
-      success:true,
+      success: true,
 
-      data:{
+      data: {
 
-        trips:items,
+        trips:
+          items,
 
-        pagination:{
-          page,
-          limit,
-          total,
-          pages:Math.ceil(
-            total/limit
+        total,
+
+        page,
+
+        limit,
+
+        pages:
+          Math.ceil(
+            total / limit
           )
-        }
 
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -842,15 +1117,21 @@ async function trips(req,res,next){
 }
 
 
-/* =========================================================
-   SINGLE TRIP
-========================================================= */
+/*
+=========================================================
+GET SINGLE TRIP
+=========================================================
+*/
 
-async function getTrip(req,res,next){
+async function getTrip(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const trip=
+    const trip =
       await Trip.findById(
         req.params.id
       )
@@ -866,11 +1147,11 @@ async function getTrip(req,res,next){
       );
 
 
-    if(!trip){
+    if (!trip) {
 
       return res.status(404).json({
 
-        success:false,
+        success: false,
 
         message:
           'Trip not found'
@@ -880,17 +1161,19 @@ async function getTrip(req,res,next){
     }
 
 
-    res.json({
+    return res.json({
 
-      success:true,
+      success: true,
 
-      data:{
+      data: {
+
         trip
+
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -899,116 +1182,112 @@ async function getTrip(req,res,next){
 }
 
 
-/* =========================================================
-   ADMIN TRIP CANCELLATION
-========================================================= */
+/*
+=========================================================
+CANCEL TRIP
+=========================================================
+*/
 
-async function cancelTrip(req,res,next){
+async function cancelTrip(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const trip=
+    const trip =
       await Trip.findOne({
 
-        _id:req.params.id,
+        _id:
+          req.params.id,
 
-        status:{
-          $in:[
-            'SEARCHING_DRIVER',
-            'DRIVER_ASSIGNED',
-            'DRIVER_ARRIVING',
-            'DRIVER_ARRIVED'
-          ]
+        status: {
+          $in:
+            activeStatuses
         }
 
       });
 
 
-    if(!trip){
+    if (!trip) {
 
       return res.status(409).json({
 
-        success:false,
+        success: false,
 
         message:
-          'Trip cannot be administratively cancelled at its current stage'
+          'Trip cannot be cancelled at its current stage'
 
       });
 
     }
 
 
-    let refunded=false;
+    /*
+    -------------------------------------------------------
+    WALLET REFUND
+    -------------------------------------------------------
+    */
 
+    if (
 
-    if(
-      trip.paymentMethod==='wallet'&&
-      trip.walletReservedAt&&
+      trip.paymentMethod === 'wallet' &&
+
+      trip.walletReservedAt &&
+
       !trip.walletRefundedAt
-    ){
 
-      const result=
+    ) {
+
+      const result =
         await refundRiderWallet(
           trip
         );
 
-      refunded=result.refunded;
+
+      if (
+        result.refunded
+      ) {
+
+        trip.walletRefundedAt =
+          new Date();
+
+        trip.paymentStatus =
+          'refunded';
+
+      }
 
     }
 
 
-    trip.status='CANCELLED';
+    trip.status =
+      'CANCELLED';
 
-    trip.cancelledAt=new Date();
 
-
-    if(refunded){
-
-      trip.walletRefundedAt=
-        new Date();
-
-      trip.paymentStatus=
-        'refunded';
-
-    }
+    trip.cancelledAt =
+      new Date();
 
 
     await trip.save();
 
 
-    const live=
-      await Trip.findById(
-        trip._id
-      )
+    return res.json({
 
-      .populate(
-        'rider',
-        'fullName phone'
-      )
-
-      .populate(
-        'driver',
-        'fullName phone'
-      );
-
-
-    res.json({
-
-      success:true,
+      success: true,
 
       message:
-        refunded
-          ?'Trip cancelled by admin and wallet fare refunded'
-          :'Trip cancelled by admin',
+        'Trip cancelled',
 
-      data:{
-        trip:live,
-        refunded
+      data: {
+
+        trip
+
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -1017,372 +1296,73 @@ async function cancelTrip(req,res,next){
 }
 
 
-/* =========================================================
-   PAYMENTS
-   REAL FINANCIAL SOURCE OF TRUTH
-========================================================= */
+/*
+=========================================================
+PAYMENTS
+=========================================================
+*/
 
-async function payments(req,res,next){
+async function payments(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const page=Math.max(
-      1,
-      Number(req.query.page)||1
-    );
+    const [
+      payments,
+      byMethod
+    ] = await Promise.all([
 
-    const limit=Math.min(
-      100,
-      Math.max(
-        1,
-        Number(req.query.limit)||30
-      )
-    );
+      Trip.find({
 
+        status:
+          'TRIP_COMPLETED'
 
-    /*
-     * Only completed trips are financial
-     * transactions.
-     */
-    const q={
-      status:'TRIP_COMPLETED'
-    };
-
-
-    if(req.query.paymentMethod){
-
-      q.paymentMethod=
-        req.query.paymentMethod;
-
-    }
-
-
-    const[
-      trips,
-      total,
-      byMethod,
-      totals
-    ]=await Promise.all([
-
-
-      /* ===================================================
-         ACTUAL COMPLETED TRIP RECORDS
-      =================================================== */
-
-      Trip.find(q)
+      })
 
         .populate(
           'rider',
-          'fullName phone'
+          'fullName'
         )
 
         .populate(
           'driver',
-          'fullName phone'
+          'fullName'
         )
 
         .sort({
-          completedAt:-1,
-          createdAt:-1
+          completedAt: -1
         })
 
-        .skip(
-          (page-1)*limit
-        )
-
-        .limit(limit)
+        .limit(200)
 
         .lean(),
 
-
-      Trip.countDocuments(q),
-
-
-      /* ===================================================
-         PAYMENT METHOD BREAKDOWN
-      =================================================== */
-
       Trip.aggregate([
 
         {
-          $match:q
-        },
-
-        {
-          $group:{
-
-            _id:'$paymentMethod',
-
-            amount:{
-              $sum:{
-                $convert:{
-                  input:'$fare',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            },
-
-            commission:{
-              $sum:{
-                $convert:{
-                  input:'$platformCommission',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            },
-
-            driverEarnings:{
-              $sum:{
-                $convert:{
-                  input:'$driverNetEarning',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            },
-
-            count:{
-              $sum:1
-            }
-
+          $match: {
+            status:
+              'TRIP_COMPLETED'
           }
-        }
-
-      ]),
-
-
-      /* ===================================================
-         REAL FINANCIAL TOTALS
-      =================================================== */
-
-      Trip.aggregate([
-
-        {
-          $match:q
         },
 
         {
-          $group:{
+          $group: {
 
-            _id:null,
+            _id:
+              '$paymentMethod',
 
-
-            gross:{
-              $sum:{
-                $convert:{
-                  input:'$fare',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
+            amount: {
+              $sum:
+                '$fare'
             },
 
-
-            /*
-             * Only commission that has actually been
-             * collected counts as Kaduna Only revenue.
-             */
-            platformRevenue:{
-              $sum:{
-                $cond:[
-
-                  {
-                    $eq:[
-                      '$commissionStatus',
-                      'collected'
-                    ]
-                  },
-
-                  {
-                    $convert:{
-                      input:
-                        '$platformCommission',
-                      to:'double',
-                      onError:0,
-                      onNull:0
-                    }
-                  },
-
-                  0
-
-                ]
-              }
-            },
-
-
-            /*
-             * Commission still owed by drivers.
-             */
-            dueCommission:{
-              $sum:{
-                $cond:[
-
-                  {
-                    $eq:[
-                      '$commissionStatus',
-                      'due'
-                    ]
-                  },
-
-                  {
-                    $convert:{
-                      input:
-                        '$platformCommission',
-                      to:'double',
-                      onError:0,
-                      onNull:0
-                    }
-                  },
-
-                  0
-
-                ]
-              }
-            },
-
-
-            /*
-             * Actual persisted driver earnings.
-             */
-            driverEarnings:{
-              $sum:{
-                $convert:{
-                  input:'$driverNetEarning',
-                  to:'double',
-                  onError:0,
-                  onNull:0
-                }
-              }
-            },
-
-
-            /*
-             * Cash fare.
-             */
-            cashFare:{
-              $sum:{
-                $cond:[
-
-                  {
-                    $eq:[
-                      '$paymentMethod',
-                      'cash'
-                    ]
-                  },
-
-                  {
-                    $convert:{
-                      input:'$fare',
-                      to:'double',
-                      onError:0,
-                      onNull:0
-                    }
-                  },
-
-                  0
-
-                ]
-              }
-            },
-
-
-            /*
-             * Wallet fare.
-             */
-            walletFare:{
-              $sum:{
-                $cond:[
-
-                  {
-                    $eq:[
-                      '$paymentMethod',
-                      'wallet'
-                    ]
-                  },
-
-                  {
-                    $convert:{
-                      input:'$fare',
-                      to:'double',
-                      onError:0,
-                      onNull:0
-                    }
-                  },
-
-                  0
-
-                ]
-              }
-            },
-
-
-            cashTrips:{
-              $sum:{
-                $cond:[
-                  {
-                    $eq:[
-                      '$paymentMethod',
-                      'cash'
-                    ]
-                  },
-                  1,
-                  0
-                ]
-              }
-            },
-
-
-            walletTrips:{
-              $sum:{
-                $cond:[
-                  {
-                    $eq:[
-                      '$paymentMethod',
-                      'wallet'
-                    ]
-                  },
-                  1,
-                  0
-                ]
-              }
-            },
-
-
-            collectedCommissionTrips:{
-              $sum:{
-                $cond:[
-                  {
-                    $eq:[
-                      '$commissionStatus',
-                      'collected'
-                    ]
-                  },
-                  1,
-                  0
-                ]
-              }
-            },
-
-
-            dueCommissionTrips:{
-              $sum:{
-                $cond:[
-                  {
-                    $eq:[
-                      '$commissionStatus',
-                      'due'
-                    ]
-                  },
-                  1,
-                  0
-                ]
-              }
+            count: {
+              $sum:
+                1
             }
 
           }
@@ -1393,198 +1373,31 @@ async function payments(req,res,next){
     ]);
 
 
-    const t=
-      totals[0]||{
+    return res.json({
 
-        gross:0,
+      success: true,
 
-        platformRevenue:0,
-
-        dueCommission:0,
-
-        driverEarnings:0,
-
-        cashFare:0,
-
-        walletFare:0,
-
-        cashTrips:0,
-
-        walletTrips:0,
-
-        collectedCommissionTrips:0,
-
-        dueCommissionTrips:0
-
-      };
-
-
-    /*
-     * Add a normalized financial object to each
-     * completed trip.
-     *
-     * IMPORTANT:
-     * Missing database values become ZERO.
-     *
-     * They are NEVER replaced with the current
-     * configured commission.
-     */
-    const payments=
-      trips.map(trip=>({
-
-        ...trip,
-
-        financial:{
-
-          fare:Number(
-            trip.fare||0
-          ),
-
-          platformCommission:Number(
-            trip.platformCommission||0
-          ),
-
-          driverNetEarning:Number(
-            trip.driverNetEarning||0
-          ),
-
-          paymentMethod:
-            trip.paymentMethod||
-            'unknown',
-
-          paymentStatus:
-            trip.paymentStatus||
-            'unknown',
-
-          commissionStatus:
-            trip.commissionStatus||
-            'unknown',
-
-          commissionCollected:
-            trip.commissionStatus===
-            'collected'
-
-              ?Number(
-                  trip.platformCommission||0
-                )
-
-              :0,
-
-          commissionDue:
-            trip.commissionStatus===
-            'due'
-
-              ?Number(
-                  trip.platformCommission||0
-                )
-
-              :0
-
-        }
-
-      }));
-
-
-    res.json({
-
-      success:true,
-
-      data:{
+      data: {
 
         payments,
 
+        summary: {
 
-        summary:{
+          gross:
+            payments.reduce(
+              (
+                sum,
+                item
+              ) =>
+                sum +
+                Number(
+                  item.fare || 0
+                ),
 
-          gross:Number(
-            t.gross||0
-          ),
+              0
+            ),
 
-
-          platformRevenue:Number(
-            t.platformRevenue||0
-          ),
-
-
-          dueCommission:Number(
-            t.dueCommission||0
-          ),
-
-
-          driverEarnings:Number(
-            t.driverEarnings||0
-          ),
-
-
-          cashFare:Number(
-            t.cashFare||0
-          ),
-
-
-          walletFare:Number(
-            t.walletFare||0
-          ),
-
-
-          cashTrips:Number(
-            t.cashTrips||0
-          ),
-
-
-          walletTrips:Number(
-            t.walletTrips||0
-          ),
-
-
-          collectedCommission:Number(
-            t.platformRevenue||0
-          ),
-
-
-          collectedCommissionTrips:Number(
-            t.collectedCommissionTrips||0
-          ),
-
-
-          dueCommissionTrips:Number(
-            t.dueCommissionTrips||0
-          ),
-
-
-          /*
-           * CURRENT CONFIGURATION ONLY.
-           *
-           * This is not used to calculate any
-           * historical transaction.
-           */
-          flatCommission:Number(
-            flatCommission()||0
-          ),
-
-
-          currency:'NGN',
-
-
-          source:
-            'completed_trip_records'
-
-        },
-
-
-        byMethod,
-
-
-        pagination:{
-
-          page,
-
-          limit,
-
-          total,
-
-          pages:Math.ceil(
-            total/limit
-          )
+          byMethod
 
         }
 
@@ -1592,7 +1405,7 @@ async function payments(req,res,next){
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -1601,58 +1414,48 @@ async function payments(req,res,next){
 }
 
 
-/* =========================================================
-   WALLETS
-========================================================= */
+/*
+=========================================================
+WALLETS
+=========================================================
+*/
 
-async function wallets(req,res,next){
+async function wallets(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const items=
+    const wallets =
       await Wallet.find()
 
         .populate(
           'user',
-          'fullName phone role status'
+          'fullName phone role'
         )
 
         .sort({
-          updatedAt:-1
+          updatedAt: -1
         })
 
-        .limit(200);
+        .limit(250);
 
 
-    const totalBalance=
-      items.reduce(
+    return res.json({
 
-        (total,wallet)=>
-          total+
-          Number(
-            wallet.balance||0
-          ),
+      success: true,
 
-        0
+      data: {
 
-      );
-
-
-    res.json({
-
-      success:true,
-
-      data:{
-
-        wallets:items,
-
-        totalBalance
+        wallets
 
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -1661,72 +1464,53 @@ async function wallets(req,res,next){
 }
 
 
-/* =========================================================
-   GET PRICING CONFIGURATION
-========================================================= */
+/*
+=========================================================
+PRICING
+=========================================================
+*/
 
-async function pricing(req,res,next){
+async function pricing(
+  req,
+  res,
+  next
+) {
 
-  try{
+  try {
 
-    const config=
+    const config =
       await getPricingConfig();
 
 
-    res.json({
-
-      success:true,
-
-      data:{
-
-        pricing:{
-
-          bike:config.bike,
-
-          keke:config.keke,
-
-          car:config.car,
-
-          suv:config.suv
-
-        },
+    const {
+      key,
+      version,
+      createdAt,
+      updatedAt,
+      ...pricing
+    } = config;
 
 
-        locations:
-          Object.keys(
-            LOCATIONS
-          ),
+    return res.json({
 
+      success: true,
 
-        platformCommission:{
+      data: {
 
-          type:'flat',
+        pricing,
 
-          amount:Number(
-            config.platformCommission||0
-          ),
+        version,
 
-          currency:'NGN'
+        currency:
+          'NGN',
 
-        },
-
-
-        currency:'NGN',
-
-
-        version:
-          config.version||
-          'kaduna-v1',
-
-
-        note:
-          'Pricing is controlled by the administrator and stored on the server.'
+        updatedAt
 
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -1735,210 +1519,61 @@ async function pricing(req,res,next){
 }
 
 
-/* =========================================================
-   UPDATE PRICING CONFIGURATION
-========================================================= */
+/*
+=========================================================
+UPDATE PRICING
+=========================================================
+*/
 
 async function updatePricing(
   req,
   res,
   next
-){
+) {
 
-  try{
+  try {
 
-    const{
-      pricing,
-      platformCommission
-    }=req.body||{};
-
-
-    if(
-      !pricing||
-      typeof pricing!=='object'
-    ){
-
-      return res.status(400).json({
-
-        success:false,
-
-        message:
-          'Pricing configuration is required'
-
-      });
-
-    }
-
-
-    const vehicles=[
-      'bike',
-      'keke',
-      'car',
-      'suv'
-    ];
-
-
-    for(
-      const vehicle of vehicles
-    ){
-
-      const p=
-        pricing[vehicle];
-
-
-      if(!p){
-
-        return res.status(400).json({
-
-          success:false,
-
-          message:
-            `Missing ${vehicle} pricing`
-
-        });
-
-      }
-
-
-      const base=
-        Number(p.base);
-
-      const perKm=
-        Number(p.perKm);
-
-      const minimum=
-        Number(p.minimum);
-
-      const avgKph=
-        Number(p.avgKph);
-
-
-      if(
-
-        !Number.isFinite(base)||
-        base<0||
-
-        !Number.isFinite(perKm)||
-        perKm<0||
-
-        !Number.isFinite(minimum)||
-        minimum<0||
-
-        !Number.isFinite(avgKph)||
-        avgKph<=0
-
-      ){
-
-        return res.status(400).json({
-
-          success:false,
-
-          message:
-            `Invalid ${vehicle} pricing values`
-
-        });
-
-      }
-
-
-      if(minimum<base){
-
-        return res.status(400).json({
-
-          success:false,
-
-          message:
-            `${vehicle} minimum fare cannot be lower than base fare`
-
-        });
-
-      }
-
-    }
-
-
-    const commission=
-      Number(
-        platformCommission
-      );
-
-
-    if(
-      !Number.isFinite(commission)||
-      commission<0
-    ){
-
-      return res.status(400).json({
-
-        success:false,
-
-        message:
-          'Invalid platform commission'
-
-      });
-
-    }
-
-
-    const updated=
+    const updated =
       await updatePricingConfig({
+
+        pricing:
+          req.body.pricing
+
+      });
+
+
+    const {
+      key,
+      version,
+      createdAt,
+      updatedAt,
+      ...pricing
+    } = updated;
+
+
+    return res.json({
+
+      success: true,
+
+      message:
+        'Pricing updated',
+
+      data: {
 
         pricing,
 
-        platformCommission:
-          commission
+        version,
 
-      });
+        currency:
+          'NGN',
 
-
-    res.json({
-
-      success:true,
-
-      message:
-        'Pricing configuration updated successfully',
-
-
-      data:{
-
-        pricing:{
-
-          bike:updated.bike,
-
-          keke:updated.keke,
-
-          car:updated.car,
-
-          suv:updated.suv
-
-        },
-
-
-        platformCommission:{
-
-          type:'flat',
-
-          amount:Number(
-            updated.platformCommission||0
-          ),
-
-          currency:'NGN'
-
-        },
-
-
-        currency:'NGN',
-
-
-        version:
-          updated.version||
-          'kaduna-v1'
+        updatedAt
 
       }
 
     });
 
-  }catch(e){
+  } catch (e) {
 
     next(e);
 
@@ -1947,11 +1582,445 @@ async function updatePricing(
 }
 
 
-/* =========================================================
-   EXPORTS
-========================================================= */
+/*
+=========================================================
+STAFF OPERATIONS
+=========================================================
+*/
 
-module.exports={
+/*
+ * Return Staff Operations accounts.
+ *
+ * ADMIN ONLY.
+ */
+
+async function staff(
+  req,
+  res,
+  next
+) {
+
+  try {
+
+    const page =
+      Math.max(
+        1,
+        Number(req.query.page) || 1
+      );
+
+
+
+    const limit =
+      Math.min(
+        100,
+        Math.max(
+          1,
+          Number(req.query.limit) || 25
+        )
+      );
+
+
+    const q = {
+
+      role:
+        'staff_operations'
+
+    };
+
+
+    if (
+
+      [
+        'active',
+        'suspended'
+      ].includes(
+        req.query.status
+      )
+
+    ) {
+
+      q.status =
+        req.query.status;
+
+    }
+
+
+    if (
+      req.query.search
+    ) {
+
+      const search =
+        String(
+          req.query.search
+        ).trim();
+
+
+      if (search) {
+
+        q.$or = [
+
+          {
+            fullName:
+              new RegExp(
+                search,
+                'i'
+              )
+          },
+
+          {
+            phone:
+              new RegExp(
+                search,
+                'i'
+              )
+          },
+
+          {
+            email:
+              new RegExp(
+                search,
+                'i'
+              )
+          }
+
+        ];
+
+      }
+
+    }
+
+
+    const [
+      items,
+      total
+    ] = await Promise.all([
+
+      User.find(q)
+
+        .select(
+          'fullName phone email role status createdAt updatedAt'
+        )
+
+        .sort({
+          createdAt: -1
+        })
+
+        .skip(
+          (page - 1) * limit
+        )
+
+        .limit(limit),
+
+      User.countDocuments(q)
+
+    ]);
+
+
+    return res.json({
+
+      success: true,
+
+      data: {
+
+        staff:
+          items,
+
+        total,
+
+        page,
+
+        limit,
+
+        pages:
+          Math.ceil(
+            total / limit
+          )
+
+      }
+
+    });
+
+  } catch (e) {
+
+    next(e);
+
+  }
+
+}
+
+
+/*
+=========================================================
+CREATE STAFF ACCOUNT
+=========================================================
+*/
+
+async function createStaff(
+  req,
+  res,
+  next
+){
+
+try{
+
+
+const {
+  fullName,
+  phone,
+  email,
+  password,
+  role
+}=req.body;
+
+
+
+if(
+ !fullName ||
+ !phone ||
+ !password
+){
+
+return res.status(400).json({
+
+success:false,
+
+message:
+'Full name, phone and password are required'
+
+});
+
+}
+
+
+
+const User =
+require('../models/User');
+
+
+
+const existing =
+await User.findOne({
+phone
+});
+
+
+
+if(existing){
+
+return res.status(400).json({
+
+success:false,
+
+message:
+'User already exists'
+
+});
+
+}
+
+
+
+const bcrypt =
+require('bcryptjs');
+
+
+
+const hashedPassword =
+await bcrypt.hash(
+password,
+12
+);
+
+
+
+const allowedRoles = [
+
+  'staff_operations',
+  'customer_support',
+  'dispatcher',
+  'finance'
+
+];
+
+
+const staffRole =
+allowedRoles.includes(role)
+
+?
+role
+
+:
+'staff_operations';
+
+
+
+const user =
+await User.create({
+
+fullName,
+
+phone,
+
+email,
+
+passwordHash:
+hashedPassword,
+
+role:
+staffRole,
+
+status:
+'active'
+
+});
+
+
+return res.json({
+
+success:true,
+
+message:
+'Staff account created successfully',
+
+data:{
+user
+}
+
+});
+
+
+}
+catch(error){
+
+next(error);
+
+}
+
+}
+
+/*
+=========================================================
+SET STAFF STATUS
+=========================================================
+*/
+
+async function setStaffStatus(
+  req,
+  res,
+  next
+) {
+
+  try {
+
+    const status =
+      req.body.status;
+
+
+    if (
+
+      ![
+        'active',
+        'suspended'
+      ].includes(status)
+
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          'Invalid staff account status'
+
+      });
+
+    }
+
+
+    const staffUser =
+      await User.findOne({
+
+        _id:
+          req.params.id,
+
+        role:
+          'staff_operations'
+
+      });
+
+
+    if (!staffUser) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message:
+          'Staff Operations account not found'
+
+      });
+
+    }
+
+
+    staffUser.status =
+      status;
+
+
+    await staffUser.save();
+
+
+    return res.json({
+
+      success: true,
+
+      message:
+        `Staff Operations account ${status}`,
+
+      data: {
+
+        user: {
+
+          _id:
+            staffUser._id,
+
+          fullName:
+            staffUser.fullName,
+
+          phone:
+            staffUser.phone,
+
+          email:
+            staffUser.email,
+
+          role:
+            staffUser.role,
+
+          status:
+            staffUser.status
+
+        }
+
+      }
+
+    });
+
+  } catch (e) {
+
+    next(e);
+
+  }
+
+}
+
+
+/*
+=========================================================
+EXPORTS
+=========================================================
+*/
+
+module.exports = {
 
   dashboard,
 
@@ -1975,6 +2044,12 @@ module.exports={
 
   pricing,
 
-  updatePricing
+  updatePricing,
+
+  staff,
+
+  setStaffStatus,
+
+  createStaff,
 
 };

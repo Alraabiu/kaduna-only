@@ -38,6 +38,9 @@ const {
   requestDriverCompletion
 } = require('../services/destinationArrivalService');
 
+const {
+  getPricingConfig
+} = require('../services/pricingConfigService');
 
 /*
  * ---------------------------------------------------------
@@ -611,26 +614,39 @@ async function create(req, res, next) {
         seatsOccupied,
 
         /*
-         * Explicit pricing basis makes the transaction
-         * easier to audit later.
-         */
+ * -----------------------------------------------------
+ * COMMERCIAL PRICING INFORMATION
+ * -----------------------------------------------------
+ *
+ * The quote object is authoritative.
+ *
+ * Do NOT hard-code ₦500 here.
+ * The Admin may configure a different fare for every
+ * route.
+ * -----------------------------------------------------
+ */
 
-        pricingBasis:
-          isKeke
-            ? 'fixed_per_passenger'
-            : 'distance_based',
+pricingBasis:
+  q.pricingBasis,
 
-        passengerCapacity:
-          isKeke
-            ? 4
-            : null,
+passengerCapacity:
+  isKeke
+    ? Number(
+        q.passengerCapacity ||
+        4
+      )
+    : null,
 
-        farePerPassenger:
-          isKeke
-            ? 500
-            : null
+farePerPassenger:
+  isKeke
+    ? Number(
+        q.farePerPassenger ||
+        q.singleSeatFare ||
+        q.fare
+      )
+    : null,
+
       });
-
 
     /*
      * -----------------------------------------------------
@@ -1297,32 +1313,28 @@ async function accept(
 
   try {
 
-    const d =
-      await DriverProfile.findOne({
-
-        user:
-          req.user._id,
-
-        verificationStatus:
-          'approved',
-
-        online:
-          true
-
-      });
-
+    const d = await DriverProfile.findOne({ user: req.user._id });
 
     if (!d) {
-
       return res.status(403).json({
-
         success: false,
-
-        message:
-          'Driver must be approved and online'
-
+        message: 'Driver profile not found'
       });
+    }
 
+    const verification = String(d.verificationStatus || '').trim().toLowerCase();
+    if (verification !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        message: 'Driver must be approved before accepting trips'
+      });
+    }
+
+    if (d.online !== true) {
+      return res.status(403).json({
+        success: false,
+        message: 'Driver must be online before accepting trips'
+      });
     }
 
 

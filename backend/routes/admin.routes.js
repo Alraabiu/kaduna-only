@@ -1,8 +1,8 @@
 const r = require('express').Router();
 
 const c = require('../controllers/adminController');
+
 const w = require('../controllers/withdrawalController');
-const pw = require('../controllers/platformWithdrawalController');
 
 const {
   requireAuth,
@@ -10,9 +10,12 @@ const {
 } = require('../middleware/auth');
 
 
-// =========================================================
-// ADMIN AUTHENTICATION
-// =========================================================
+
+/*
+=========================================================
+ADMIN AUTHORIZATION
+=========================================================
+*/
 
 r.use(
   requireAuth,
@@ -20,9 +23,12 @@ r.use(
 );
 
 
-// =========================================================
-// DASHBOARD
-// =========================================================
+
+/*
+=========================================================
+DASHBOARD
+=========================================================
+*/
 
 r.get(
   '/dashboard',
@@ -30,14 +36,18 @@ r.get(
 );
 
 
-// =========================================================
-// USERS
-// =========================================================
+
+/*
+=========================================================
+USER MANAGEMENT
+=========================================================
+*/
 
 r.get(
   '/users',
   c.users
 );
+
 
 r.patch(
   '/users/:id/status',
@@ -45,14 +55,18 @@ r.patch(
 );
 
 
-// =========================================================
-// DRIVERS
-// =========================================================
+
+/*
+=========================================================
+DRIVER MANAGEMENT
+=========================================================
+*/
 
 r.get(
   '/drivers',
   c.drivers
 );
+
 
 r.patch(
   '/drivers/:id/verify',
@@ -60,19 +74,24 @@ r.patch(
 );
 
 
-// =========================================================
-// TRIPS
-// =========================================================
+
+/*
+=========================================================
+TRIP MANAGEMENT
+=========================================================
+*/
 
 r.get(
   '/trips',
   c.trips
 );
 
+
 r.get(
   '/trips/:id',
   c.getTrip
 );
+
 
 r.patch(
   '/trips/:id/cancel',
@@ -80,9 +99,12 @@ r.patch(
 );
 
 
-// =========================================================
-// PAYMENTS
-// =========================================================
+
+/*
+=========================================================
+FINANCE
+=========================================================
+*/
 
 r.get(
   '/payments',
@@ -90,24 +112,24 @@ r.get(
 );
 
 
-// =========================================================
-// WALLETS
-// =========================================================
-
 r.get(
   '/wallets',
   c.wallets
 );
 
 
-// =========================================================
-// PRICING
-// =========================================================
+
+/*
+=========================================================
+PRICING MANAGEMENT
+=========================================================
+*/
 
 r.get(
   '/pricing',
   c.pricing
 );
+
 
 r.patch(
   '/pricing',
@@ -115,24 +137,30 @@ r.patch(
 );
 
 
-// =========================================================
-// DRIVER WITHDRAWALS
-// =========================================================
+
+/*
+=========================================================
+WITHDRAWAL MANAGEMENT
+=========================================================
+*/
 
 r.get(
   '/withdrawals',
   w.adminList
 );
 
+
 r.patch(
   '/withdrawals/:id/approve',
   w.approve
 );
 
+
 r.patch(
   '/withdrawals/:id/paid',
   w.markPaid
 );
+
 
 r.patch(
   '/withdrawals/:id/reject',
@@ -140,124 +168,30 @@ r.patch(
 );
 
 
-// =========================================================
-// PLATFORM COMMISSION
-// =========================================================
 
-
-// ---------------------------------------------------------
-// Commission summary
-// GET /api/admin/platform-revenue
-// ---------------------------------------------------------
+/*
+=========================================================
+STAFF OPERATIONS
+=========================================================
+*/
 
 r.get(
-  '/platform-revenue',
-  pw.summary
+  '/staff',
+  c.staff
 );
 
 
-// ---------------------------------------------------------
-// Nigerian bank directory
-// GET /api/admin/platform-revenue/banks
-//
-// The frontend uses this to populate the bank dropdown.
-// The admin does NOT manually enter a bank code.
-// ---------------------------------------------------------
-
-r.get(
-  '/platform-revenue/banks',
-  pw.banks
+r.patch(
+  '/staff/:id/status',
+  c.setStaffStatus
 );
 
-
-// ---------------------------------------------------------
-// Commission transaction history
-// GET /api/admin/platform-revenue/history
-// ---------------------------------------------------------
-
-r.get(
-  '/platform-revenue/history',
-  pw.revenueHistory
-);
-
-
-// ---------------------------------------------------------
-// Saved platform bank account
-// GET /api/admin/platform-revenue/bank-account
-// ---------------------------------------------------------
-
-r.get(
-  '/platform-revenue/bank-account',
-  pw.getBankAccount
-);
-
-
-// ---------------------------------------------------------
-// Verify Nigerian bank account
-// POST /api/admin/platform-revenue/bank-account/verify
-//
-// Frontend sends:
-// {
-//   accountNumber,
-//   bankCode
-// }
-//
-// bankCode comes from the selected bank in the
-// Paystack bank directory.
-// ---------------------------------------------------------
 
 r.post(
-  '/platform-revenue/bank-account/verify',
-  pw.verifyBankAccount
+'/staff',
+c.createStaff
 );
 
 
-// ---------------------------------------------------------
-// Save verified platform bank account
-// POST /api/admin/platform-revenue/bank-account
-// ---------------------------------------------------------
-
-r.post(
-  '/platform-revenue/bank-account',
-  pw.saveBankAccount
-);
-
-
-// ---------------------------------------------------------
-// Platform commission withdrawal history
-// GET /api/admin/platform-revenue/withdrawals
-// ---------------------------------------------------------
-
-r.get(
-  '/platform-revenue/withdrawals',
-  pw.withdrawals
-);
-
-
-// ---------------------------------------------------------
-// Withdraw platform commission to local bank
-// POST /api/admin/platform-revenue/withdraw
-// ---------------------------------------------------------
-
-r.post(
-  '/platform-revenue/withdraw',
-  pw.requestWithdrawal
-);
-
-
-// ---------------------------------------------------------
-// Verify/update Paystack transfer status
-// GET /api/admin/platform-revenue/withdrawals/:id/verify
-// ---------------------------------------------------------
-
-r.get(
-  '/platform-revenue/withdrawals/:id/verify',
-  pw.verifyWithdrawal
-);
-
-
-// =========================================================
-// EXPORT
-// =========================================================
 
 module.exports = r;

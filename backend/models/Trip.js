@@ -190,7 +190,7 @@ const schema = new mongoose.Schema(
     },
 
     /* =====================================================
-       FARE / COMMISSION
+       FARE
     ===================================================== */
 
     fare: {
@@ -199,43 +199,21 @@ const schema = new mongoose.Schema(
       min: 0
     },
 
-    platformCommission: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-
-    driverNetEarning: {
-      type: Number,
-      default: 0,
-      min: 0
-    },
-
-    commissionStatus: {
-      type: String,
-      enum: [
-        'not_applicable',
-        'collected',
-        'due'
-      ],
-      default: 'not_applicable',
-      index: true
-    },
-
-    commissionCollectedAt: Date,
-
     /* =====================================================
        ROUTING
     ===================================================== */
 
-    routingSource: {
-      type: String,
-      enum: [
-        'osrm',
-        'estimate'
-      ],
-      default: 'osrm'
-    },
+   routingSource: {
+  type: String,
+
+  enum: [
+    'osrm',
+    'google',
+    'estimate'
+  ],
+
+  default: 'osrm'
+},
 
     /* =====================================================
        PAYMENT

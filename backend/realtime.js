@@ -1,103 +1,492 @@
 let ioInstance = null;
 
-function idOf(v) {
-  return v ? String(v._id || v) : null;
+
+/*
+=========================================================
+ID HELPER
+=========================================================
+*/
+
+function idOf(value) {
+
+  if (!value) {
+
+    return null;
+
+  }
+
+
+  return String(
+    value._id || value
+  );
+
 }
+
+
+
+/*
+=========================================================
+SET SOCKET INSTANCE
+=========================================================
+*/
 
 function setIO(io) {
+
   ioInstance = io;
+
 }
+
+
+
+/*
+=========================================================
+GET SOCKET INSTANCE
+=========================================================
+*/
 
 function getIO() {
+
   return ioInstance;
+
 }
 
-function emitTrip(event, trip) {
-  if (!ioInstance || !trip) return;
 
-  const payload = { event, trip };
 
-  const rider = idOf(trip.rider);
-  const driver = idOf(trip.driver);
+/*
+=========================================================
+TRIP EVENT EMITTER
+=========================================================
+*/
 
-  if (rider) {
-    ioInstance.to(`user:${rider}`).emit(event, payload);
+function emitTrip(
+  event,
+  trip
+) {
+
+
+  if (
+    !ioInstance ||
+    !trip
+  ) {
+
+    return;
+
   }
 
-  if (driver) {
-    ioInstance.to(`user:${driver}`).emit(event, payload);
-  }
 
-  ioInstance.to('role:admin').emit(event, payload);
-}
-
-function emitNewTrip(trip) {
-  if (!ioInstance || !trip) return;
-
-  ioInstance
-    .to(`drivers:online:${trip.vehicleType}`)
-    .emit('trip:new', {
-      event: 'trip:new',
-      trip
-    });
-
-  ioInstance.to('role:admin').emit('trip:new', {
-    event: 'trip:new',
-    trip
-  });
-}
-
-function emitTripTaken(trip) {
-  if (!ioInstance) return;
-
-  ioInstance.to('role:driver').emit('trip:taken', {
-    event: 'trip:taken',
-    tripId: idOf(trip),
-    vehicleType: trip?.vehicleType
-  });
-}
-
-/**
- * Broadcast the latest driver location.
- *
- * Admin receives every approved driver's location.
- * Rider receives location only when the driver is assigned
- * to that rider's active trip.
- */
-function emitDriverLocation({
-  driverId,
-  riderId = null,
-  tripId = null,
-  location,
-  driver = null,
-  trip = null
-}) {
-  if (!ioInstance || !driverId || !location) return;
 
   const payload = {
-    driverId: String(driverId),
-    tripId: tripId ? String(tripId) : null,
-    location,
-    driver,
+
+    event,
+
     trip
+
   };
 
-  // Admin receives every driver's live position.
-  ioInstance.to('role:admin').emit('driver:location', payload);
 
-  // Rider only receives the location of their assigned driver.
-  if (riderId) {
+
+  const rider =
+    idOf(
+      trip.rider
+    );
+
+
+  const driver =
+    idOf(
+      trip.driver
+    );
+
+
+
+  if (
+    rider
+  ) {
+
     ioInstance
-      .to(`user:${String(riderId)}`)
-      .emit('driver:location', payload);
+      .to(
+        `user:${rider}`
+      )
+      .emit(
+        event,
+        payload
+      );
+
   }
+
+
+
+  if (
+    driver
+  ) {
+
+    ioInstance
+      .to(
+        `user:${driver}`
+      )
+      .emit(
+        event,
+        payload
+      );
+
+  }
+
+
+
+  ioInstance
+    .to(
+      'role:admin'
+    )
+    .emit(
+      event,
+      payload
+    );
+
+
 }
 
+
+
+
+/*
+=========================================================
+NEW TRIP NOTIFICATION
+=========================================================
+*/
+
+function emitNewTrip(
+  trip
+) {
+
+
+  if (
+    !ioInstance ||
+    !trip
+  ) {
+
+    return;
+
+  }
+
+
+
+  const vehicleType =
+    String(
+      trip.vehicleType || ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+
+  const driverRoom =
+    `drivers:online:${vehicleType}`;
+
+
+
+  const payload = {
+
+    event:
+      'trip:new',
+
+    trip
+
+  };
+
+
+
+  ioInstance
+    .to(
+      driverRoom
+    )
+    .emit(
+      'trip:new',
+      payload
+    );
+
+
+
+  ioInstance
+    .to(
+      'role:admin'
+    )
+    .emit(
+      'trip:new',
+      payload
+    );
+
+
+}
+
+
+
+
+/*
+=========================================================
+TRIP TAKEN
+=========================================================
+*/
+
+function emitTripTaken(
+  trip
+) {
+
+
+  if (
+    !ioInstance ||
+    !trip
+  ) {
+
+    return;
+
+  }
+
+
+
+  ioInstance
+    .to(
+      'role:driver'
+    )
+    .emit(
+
+      'trip:taken',
+
+      {
+
+        event:
+          'trip:taken',
+
+
+        tripId:
+          idOf(
+            trip
+          ),
+
+
+        vehicleType:
+          trip.vehicleType
+
+      }
+
+    );
+
+
+}
+
+
+
+
+/*
+=========================================================
+DRIVER LIVE LOCATION
+=========================================================
+*/
+
+
+function emitDriverLocation({
+
+  driverId,
+
+  riderId = null,
+
+  tripId = null,
+
+  location,
+
+  driver = null,
+
+  trip = null
+
+}) {
+
+
+
+  if (
+
+    !ioInstance ||
+
+    !driverId ||
+
+    !location
+
+  ) {
+
+    return;
+
+  }
+
+
+
+  const payload = {
+
+
+    event:
+      'driver:location',
+
+
+
+    driverId:
+      String(
+        driverId
+      ),
+
+
+
+    tripId:
+
+      tripId
+
+        ? String(
+            tripId
+          )
+
+        : null,
+
+
+
+    location: {
+
+
+      latitude:
+        Number(
+          location.latitude
+        ),
+
+
+
+      longitude:
+        Number(
+          location.longitude
+        ),
+
+
+
+      accuracy:
+        location.accuracy ||
+        null,
+
+
+
+      updatedAt:
+        location.updatedAt ||
+        new Date()
+
+    },
+
+
+
+    driver,
+
+    trip
+
+  };
+
+
+
+
+  /*
+  =======================================================
+  ADMIN LIVE MONITORING
+  =======================================================
+  */
+
+
+  ioInstance
+    .to(
+      'role:admin'
+    )
+    .emit(
+
+      'driver:location',
+
+      payload
+
+    );
+
+
+
+
+
+
+  /*
+  =======================================================
+  RIDER LIVE MAP
+  =======================================================
+  */
+
+
+  if (
+    riderId
+  ) {
+
+
+    ioInstance
+      .to(
+        `user:${String(riderId)}`
+      )
+      .emit(
+
+        'driver:location',
+
+        payload
+
+      );
+
+
+  }
+
+
+
+
+
+  /*
+  =======================================================
+  DRIVER CONFIRMATION
+  =======================================================
+  */
+
+
+  ioInstance
+    .to(
+      `user:${String(driverId)}`
+    )
+    .emit(
+
+      'driver:location:sent',
+
+      {
+
+        success:
+          true,
+
+        tripId:
+          tripId
+            ? String(tripId)
+            : null
+
+      }
+
+    );
+
+
+}
+
+
+
+
 module.exports = {
+
+
   setIO,
+
   getIO,
+
   emitTrip,
+
   emitNewTrip,
+
   emitTripTaken,
+
   emitDriverLocation
+
+
 };

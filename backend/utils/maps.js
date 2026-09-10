@@ -1,14 +1,69 @@
-const NOMINATIM_URL =
-  process.env.NOMINATIM_URL ||
-  'https://nominatim.openstreetmap.org';
+/*
+ * =========================================================
+ * KADUNA ONLY MAPS SERVICE
+ * =========================================================
+ *
+ * PROVIDERS
+ *
+ * SEARCH:
+ *   Google Places API (New)
+ *
+ * ROUTING:
+ *   Google Routes API
+ *
+ * IMPORTANT:
+ *   The Google API key stays on the backend.
+ *
+ * MOBILE CONTRACT REMAINS:
+ *
+ *   searchKaduna(query)
+ *   getRoute(pickup, destination)
+ *   validatePoint(point, name)
+ *
+ * No mobile UI changes are required.
+ *
+ * =========================================================
+ */
 
-const OSRM_URL =
-  process.env.OSRM_URL ||
-  'https://router.project-osrm.org';
+const GOOGLE_MAPS_API_KEY =
+  String(
+    process.env.GOOGLE_MAPS_API_KEY || ''
+  ).trim();
 
-const USER_AGENT =
-  process.env.MAPS_USER_AGENT ||
-  'KadunaOnly/1.0 (https://kaduna-only.onrender.com; contact: support@kaduna-only.com)';
+
+const GOOGLE_PLACES_URL =
+  'https://places.googleapis.com/v1/places:searchText';
+
+
+const GOOGLE_ROUTES_URL =
+  'https://routes.googleapis.com/directions/v2:computeRoutes';
+
+
+/*
+ * ---------------------------------------------------------
+ * KADUNA SEARCH AREA
+ * ---------------------------------------------------------
+ *
+ * Approximate Kaduna metropolitan bounding area.
+ *
+ * These values are used as a search restriction so that
+ * ordinary searches remain focused on Kaduna.
+ *
+ * ---------------------------------------------------------
+ */
+
+const KADUNA_BOUNDS = {
+  low: {
+    latitude: 10.35,
+    longitude: 7.30
+  },
+
+  high: {
+    latitude: 10.68,
+    longitude: 7.58
+  }
+};
+
 
 /*
  * ---------------------------------------------------------
@@ -16,49 +71,53 @@ const USER_AGENT =
  * ---------------------------------------------------------
  */
 
-const searchCache = new Map();
-const routeCache = new Map();
+const searchCache =
+  new Map();
 
-/*
- * Prevent multiple identical requests from being sent
- * to Nominatim at the same time.
- */
 
-const searchInflight = new Map();
-const routeInflight = new Map();
+const routeCache =
+  new Map();
+
 
 /*
  * ---------------------------------------------------------
- * NOMINATIM RATE LIMIT QUEUE
+ * IN-FLIGHT REQUESTS
  * ---------------------------------------------------------
  */
 
-let lastNominatimAt = 0;
+const searchInflight =
+  new Map();
 
-let nominatimQueue = Promise.resolve();
 
-const NOMINATIM_MIN_GAP =
-  Math.max(
-    1000,
-    Number(process.env.NOMINATIM_MIN_GAP_MS || 1200)
-  );
+const routeInflight =
+  new Map();
+
+
+/*
+ * ---------------------------------------------------------
+ * CACHE TTL
+ * ---------------------------------------------------------
+ */
 
 const SEARCH_CACHE_TTL =
   Math.max(
     5 * 60 * 1000,
-    Number(process.env.MAPS_SEARCH_CACHE_TTL_MS || 30 * 60 * 1000)
+    Number(
+      process.env.MAPS_SEARCH_CACHE_TTL_MS ||
+      30 * 60 * 1000
+    )
   );
+
 
 const ROUTE_CACHE_TTL =
   Math.max(
     5 * 60 * 1000,
-    Number(process.env.MAPS_ROUTE_CACHE_TTL_MS || 10 * 60 * 1000)
+    Number(
+      process.env.MAPS_ROUTE_CACHE_TTL_MS ||
+      10 * 60 * 1000
+    )
   );
 
-const MAX_429_RETRIES = 3;
-
-const wait = ms =>
-  new Promise(resolve => setTimeout(resolve, ms));
 
 /*
  * ---------------------------------------------------------
@@ -67,35 +126,78 @@ const wait = ms =>
  */
 
 function numberOrNull(value) {
-  const x = Number(value);
+
+  const x =
+    Number(value);
+
 
   return Number.isFinite(x)
     ? x
     : null;
+
 }
 
+
 function normalizeQuery(value) {
+
   return String(value || '')
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+
 }
 
-function cacheSet(cache, key, value, ttl) {
-  cache.set(key, value);
 
-  const timer = setTimeout(() => {
-    cache.delete(key);
-  }, ttl);
+function cacheSet(
+  cache,
+  key,
+  value,
+  ttl
+) {
 
-  if (typeof timer.unref === 'function') {
+  cache.set(
+    key,
+    value
+  );
+
+
+  const timer =
+    setTimeout(
+      () => {
+        cache.delete(key);
+      },
+      ttl
+    );
+
+
+  if (
+    typeof timer.unref ===
+    'function'
+  ) {
+
     timer.unref();
+
   }
+
 }
 
-function validatePoint(point, name = 'Location') {
-  const lat = numberOrNull(point?.lat);
-  const lng = numberOrNull(point?.lng);
+
+function validatePoint(
+  point,
+  name = 'Location'
+) {
+
+  const lat =
+    numberOrNull(
+      point?.lat
+    );
+
+
+  const lng =
+    numberOrNull(
+      point?.lng
+    );
+
 
   if (
     lat === null ||
@@ -105,360 +207,459 @@ function validatePoint(point, name = 'Location') {
     lng < -180 ||
     lng > 180
   ) {
-    const error = new Error(
-      `${name} requires valid coordinates`
-    );
 
-    error.statusCode = 400;
+    const error =
+      new Error(
+        `${name} requires valid coordinates`
+      );
+
+
+    error.statusCode =
+      400;
+
 
     throw error;
+
   }
 
+
   return {
+
     label:
-      String(point?.label || name).trim() ||
+      String(
+        point?.label ||
+        name
+      ).trim() ||
       name,
 
     lat,
+
     lng
+
   };
+
 }
+
 
 /*
  * ---------------------------------------------------------
- * RETRY-AFTER
+ * GOOGLE API KEY CHECK
  * ---------------------------------------------------------
  */
 
-function getRetryAfterMs(response, attempt) {
-  const header =
-    response.headers.get('retry-after');
+function requireGoogleKey() {
 
-  if (header) {
-    const seconds = Number(header);
-
-    if (
-      Number.isFinite(seconds) &&
-      seconds >= 0
-    ) {
-      return Math.min(
-        Math.max(seconds * 1000, 1200),
-        15000
-      );
-    }
-
-    const retryDate =
-      Date.parse(header);
-
-    if (Number.isFinite(retryDate)) {
-      const delay =
-        retryDate - Date.now();
-
-      if (delay > 0) {
-        return Math.min(delay, 15000);
-      }
-    }
-  }
-
-  /*
-   * Exponential backoff with a small amount
-   * of jitter.
-   */
-
-  const base =
-    Math.min(
-      15000,
-      1500 * Math.pow(2, attempt)
-    );
-
-  const jitter =
-    Math.floor(Math.random() * 500);
-
-  return base + jitter;
-}
-
-/*
- * ---------------------------------------------------------
- * RAW NOMINATIM REQUEST
- * ---------------------------------------------------------
- */
-
-async function nominatimRequest(url) {
-  for (
-    let attempt = 0;
-    attempt <= MAX_429_RETRIES;
-    attempt++
+  if (
+    !GOOGLE_MAPS_API_KEY
   ) {
-    /*
-     * Global queue spacing.
-     */
 
-    const gap =
-      NOMINATIM_MIN_GAP -
-      (Date.now() - lastNominatimAt);
-
-    if (gap > 0) {
-      await wait(gap);
-    }
-
-    lastNominatimAt = Date.now();
-
-    let response;
-
-    try {
-      response = await fetch(url, {
-        method: 'GET',
-
-        headers: {
-          'User-Agent': USER_AGENT,
-          'Accept': 'application/json',
-          'Accept-Language': 'en'
-        },
-
-        signal: AbortSignal.timeout(10000)
-      });
-    } catch (error) {
-      /*
-       * Network timeout / connection error.
-       */
-
-      if (attempt < MAX_429_RETRIES) {
-        await wait(
-          Math.min(
-            8000,
-            1000 * Math.pow(2, attempt)
-          )
-        );
-
-        continue;
-      }
-
-      const e = new Error(
-        'Location search service is temporarily unavailable'
+    const error =
+      new Error(
+        'Google Maps API key is not configured on the backend'
       );
 
-      e.statusCode = 502;
-      e.cause = error;
 
-      throw e;
-    }
+    error.statusCode =
+      500;
 
-    /*
-     * Rate limited.
-     */
 
-    if (response.status === 429) {
-      if (attempt < MAX_429_RETRIES) {
-        const delay =
-          getRetryAfterMs(
-            response,
-            attempt
-          );
+    throw error;
 
-        console.warn(
-          `[MAPS] Nominatim rate limited. Retry ${attempt + 1}/${MAX_429_RETRIES} in ${delay}ms`
-        );
-
-        await wait(delay);
-
-        continue;
-      }
-
-      const error = new Error(
-        'Location search is temporarily busy. Please try again in a few seconds.'
-      );
-
-      error.statusCode = 429;
-
-      throw error;
-    }
-
-    if (!response.ok) {
-      const error =
-        new Error(
-          `Location search unavailable (${response.status})`
-        );
-
-      error.statusCode = 502;
-
-      throw error;
-    }
-
-    try {
-      return await response.json();
-    } catch {
-      const error =
-        new Error(
-          'Location search returned an invalid response'
-        );
-
-      error.statusCode = 502;
-
-      throw error;
-    }
   }
+
+}
+
+
+/*
+ * ---------------------------------------------------------
+ * GOOGLE ERROR HANDLER
+ * ---------------------------------------------------------
+ */
+
+async function readGoogleError(
+  response,
+  fallback
+) {
+
+  let body =
+    null;
+
+
+  try {
+
+    body =
+      await response.json();
+
+  } catch {
+
+    body =
+      null;
+
+  }
+
+
+  const message =
+    body?.error?.message ||
+    body?.message ||
+    fallback;
+
 
   const error =
     new Error(
-      'Location search unavailable'
+      message
     );
 
-  error.statusCode = 502;
-
-  throw error;
-}
-
-/*
- * ---------------------------------------------------------
- * QUEUED NOMINATIM REQUEST
- * ---------------------------------------------------------
- */
-
-async function nominatimFetch(url) {
-  /*
-   * Every request enters the same promise queue.
-   */
-
-  const task = async () => {
-    return nominatimRequest(url);
-  };
-
-  const result =
-    nominatimQueue.then(
-      task,
-      task
-    );
 
   /*
-   * Keep queue alive even if a request fails.
+   * Convert Google API failures into useful HTTP
+   * responses for the Kaduna Only mobile client.
    */
 
-  nominatimQueue =
-    result.catch(() => undefined);
+  if (
+    response.status === 400
+  ) {
 
-  return result;
+    error.statusCode =
+      400;
+
+  } else if (
+    response.status === 401 ||
+    response.status === 403
+  ) {
+
+    error.statusCode =
+      502;
+
+  } else if (
+    response.status === 429
+  ) {
+
+    error.statusCode =
+      429;
+
+  } else if (
+    response.status >= 500
+  ) {
+
+    error.statusCode =
+      502;
+
+  } else {
+
+    error.statusCode =
+      502;
+
+  }
+
+
+  error.googleStatus =
+    response.status;
+
+
+  error.googleResponse =
+    body;
+
+
+  return error;
+
 }
+
 
 /*
  * ---------------------------------------------------------
  * SEARCH KADUNA
  * ---------------------------------------------------------
+ *
+ * Uses:
+ *
+ *   Google Places API (New)
+ *   Text Search
+ *
+ * Existing mobile response shape is preserved:
+ *
+ * {
+ *   placeId,
+ *   label,
+ *   shortLabel,
+ *   lat,
+ *   lng,
+ *   type
+ * }
+ *
+ * ---------------------------------------------------------
  */
 
-async function searchKaduna(query) {
+async function searchKaduna(
+  query
+) {
+
+  requireGoogleKey();
+
+
   const q =
     String(query || '')
       .trim()
       .replace(/\s+/g, ' ');
 
-  if (q.length < 3) {
+
+  if (
+    q.length < 3
+  ) {
+
     const error =
       new Error(
         'Enter at least 3 characters to search'
       );
 
-    error.statusCode = 400;
+
+    error.statusCode =
+      400;
+
 
     throw error;
+
   }
+
 
   const key =
     normalizeQuery(q);
 
-  /*
-   * 1. Return cached result.
-   */
-
-  if (searchCache.has(key)) {
-    return searchCache.get(key);
-  }
 
   /*
-   * 2. If the same request is already running,
-   * return the existing promise instead of sending
-   * another request to Nominatim.
+   * Cached result.
    */
 
-  if (searchInflight.has(key)) {
-    return searchInflight.get(key);
+  if (
+    searchCache.has(key)
+  ) {
+
+    return searchCache.get(
+      key
+    );
+
   }
+
+
+  /*
+   * Prevent duplicate simultaneous requests.
+   */
+
+  if (
+    searchInflight.has(key)
+  ) {
+
+    return searchInflight.get(
+      key
+    );
+
+  }
+
 
   const promise =
     (async () => {
+
       try {
-        const params =
-          new URLSearchParams({
-            q:
-              `${q}, Kaduna, Nigeria`,
 
-            format:
-              'jsonv2',
+        const response =
+          await fetch(
+            GOOGLE_PLACES_URL,
+            {
 
-            limit:
-              '6',
+              method:
+                'POST',
 
-            countrycodes:
-              'ng',
+              headers: {
 
-            addressdetails:
-              '1',
+                'Content-Type':
+                  'application/json',
 
-            'accept-language':
-              'en',
+                'X-Goog-Api-Key':
+                  GOOGLE_MAPS_API_KEY,
 
-            viewbox:
-              '7.30,10.68,7.58,10.35',
+                'X-Goog-FieldMask':
+                  [
+                    'places.id',
+                    'places.displayName',
+                    'places.formattedAddress',
+                    'places.location',
+                    'places.types'
+                  ].join(',')
 
-            bounded:
-              '1'
-          });
+              },
 
-        const data =
-          await nominatimFetch(
-            `${NOMINATIM_URL}/search?${params.toString()}`
+              body:
+                JSON.stringify({
+
+                  textQuery:
+                    `${q}, Kaduna, Nigeria`,
+
+                  pageSize:
+                    6,
+
+                  languageCode:
+                    'en',
+
+                  regionCode:
+                    'NG',
+
+                  locationBias: {
+
+                    rectangle: {
+
+                      low:
+                        KADUNA_BOUNDS.low,
+
+                      high:
+                        KADUNA_BOUNDS.high
+
+                    }
+
+                  }
+
+                }),
+
+              signal:
+                AbortSignal.timeout(
+                  15000
+                )
+
+            }
+
           );
 
-        const output =
-          (Array.isArray(data)
-            ? data
-            : []
-          )
-            .map(item => ({
-              placeId:
-                String(
-                  item.place_id
-                ),
 
-              label:
-                item.display_name,
+        if (
+          !response.ok
+        ) {
 
-              shortLabel:
-                item.name ||
-                String(
-                  item.display_name ||
-                  ''
-                ).split(',')[0],
+          throw await readGoogleError(
+            response,
+            `Google Places search failed (${response.status})`
+          );
 
-              lat:
-                Number(item.lat),
+        }
 
-              lng:
-                Number(item.lon),
 
-              type:
-                item.type ||
-                item.addresstype ||
-                'place'
-            }))
-            .filter(
-              item =>
-                Number.isFinite(
-                  item.lat
-                ) &&
-                Number.isFinite(
-                  item.lng
-                )
+        let data;
+
+
+        try {
+
+          data =
+            await response.json();
+
+        } catch {
+
+          const error =
+            new Error(
+              'Google Places returned an invalid response'
             );
+
+
+          error.statusCode =
+            502;
+
+
+          throw error;
+
+        }
+
+
+        const places =
+          Array.isArray(
+            data?.places
+          )
+            ? data.places
+            : [];
+
+
+        const output =
+          places
+
+            .map(
+              place => {
+
+                const latitude =
+                  numberOrNull(
+                    place?.location
+                      ?.latitude
+                  );
+
+
+                const longitude =
+                  numberOrNull(
+                    place?.location
+                      ?.longitude
+                  );
+
+
+                if (
+                  latitude === null ||
+                  longitude === null
+                ) {
+
+                  return null;
+
+                }
+
+
+                const displayName =
+                  String(
+                    place?.displayName
+                      ?.text ||
+                    ''
+                  ).trim();
+
+
+                const address =
+                  String(
+                    place?.formattedAddress ||
+                    displayName ||
+                    ''
+                  ).trim();
+
+
+                const types =
+                  Array.isArray(
+                    place?.types
+                  )
+                    ? place.types
+                    : [];
+
+
+                return {
+
+                  placeId:
+                    String(
+                      place?.id ||
+                      `${latitude},${longitude}`
+                    ),
+
+                  label:
+                    address ||
+                    displayName,
+
+                  shortLabel:
+                    displayName ||
+                    address.split(',')[0],
+
+                  lat:
+                    latitude,
+
+                  lng:
+                    longitude,
+
+                  type:
+                    types[0] ||
+                    'place'
+
+                };
+
+              }
+            )
+
+            .filter(Boolean);
+
 
         cacheSet(
           searchCache,
@@ -467,19 +668,79 @@ async function searchKaduna(query) {
           SEARCH_CACHE_TTL
         );
 
+
         return output;
+
+      } catch (
+        error
+      ) {
+
+        if (
+          error?.name ===
+          'AbortError'
+        ) {
+
+          const timeoutError =
+            new Error(
+              'Location search timed out. Please try again.'
+            );
+
+
+          timeoutError.statusCode =
+            504;
+
+
+          throw timeoutError;
+
+        }
+
+
+        if (
+          error?.statusCode
+        ) {
+
+          throw error;
+
+        }
+
+
+        const networkError =
+          new Error(
+            'Google location search is temporarily unavailable'
+          );
+
+
+        networkError.statusCode =
+          502;
+
+
+        networkError.cause =
+          error;
+
+
+        throw networkError;
+
       } finally {
-        searchInflight.delete(key);
+
+        searchInflight.delete(
+          key
+        );
+
       }
+
     })();
+
 
   searchInflight.set(
     key,
     promise
   );
 
+
   return promise;
+
 }
+
 
 /*
  * ---------------------------------------------------------
@@ -491,17 +752,39 @@ function routeKey(
   pickup,
   destination
 ) {
+
   return [
+
     pickup.lat.toFixed(5),
+
     pickup.lng.toFixed(5),
+
     destination.lat.toFixed(5),
+
     destination.lng.toFixed(5)
+
   ].join(':');
+
 }
+
 
 /*
  * ---------------------------------------------------------
  * GET ROUTE
+ * ---------------------------------------------------------
+ *
+ * Uses Google Routes API.
+ *
+ * Returns:
+ *
+ *   distanceKm
+ *   durationMinutes
+ *   geometry
+ *   source
+ *
+ * Geometry is requested directly as GeoJSON so that the
+ * existing map UI can continue consuming route geometry.
+ *
  * ---------------------------------------------------------
  */
 
@@ -509,11 +792,16 @@ async function getRoute(
   pickup,
   destination
 ) {
+
+  requireGoogleKey();
+
+
   const a =
     validatePoint(
       pickup,
       'Pickup'
     );
+
 
   const b =
     validatePoint(
@@ -521,121 +809,250 @@ async function getRoute(
       'Destination'
     );
 
+
   const key =
-    routeKey(a, b);
+    routeKey(
+      a,
+      b
+    );
+
 
   /*
-   * Return cached route.
+   * Cached route.
    */
 
-  if (routeCache.has(key)) {
-    return routeCache.get(key);
+  if (
+    routeCache.has(key)
+  ) {
+
+    return routeCache.get(
+      key
+    );
+
   }
+
 
   /*
-   * Prevent duplicate OSRM requests.
+   * Prevent duplicate simultaneous route requests.
    */
 
-  if (routeInflight.has(key)) {
-    return routeInflight.get(key);
+  if (
+    routeInflight.has(key)
+  ) {
+
+    return routeInflight.get(
+      key
+    );
+
   }
+
 
   const promise =
     (async () => {
+
       try {
-        const url =
-          `${OSRM_URL}/route/v1/driving/` +
-          `${a.lng},${a.lat};` +
-          `${b.lng},${b.lat}` +
-          `?overview=full` +
-          `&geometries=geojson` +
-          `&steps=false`;
 
-        let response;
+        const response =
+          await fetch(
+            GOOGLE_ROUTES_URL,
+            {
 
-        try {
-          response =
-            await fetch(
-              url,
-              {
-                method: 'GET',
+              method:
+                'POST',
 
-                headers: {
-                  'User-Agent':
-                    USER_AGENT,
+              headers: {
 
-                  'Accept':
-                    'application/json'
-                },
+                'Content-Type':
+                  'application/json',
 
-                signal:
-                  AbortSignal.timeout(
-                    15000
-                  )
-              }
-            );
-        } catch (error) {
-          const e =
-            new Error(
-              'Routing service is temporarily unavailable'
-            );
+                'X-Goog-Api-Key':
+                  GOOGLE_MAPS_API_KEY,
 
-          e.statusCode = 502;
-          e.cause = error;
+                'X-Goog-FieldMask':
+                  [
+                    'routes.distanceMeters',
+                    'routes.duration',
+                    'routes.polyline.geoJsonLinestring'
+                  ].join(',')
 
-          throw e;
+              },
+
+              body:
+                JSON.stringify({
+
+                  origin: {
+
+                    location: {
+
+                      latLng: {
+
+                        latitude:
+                          a.lat,
+
+                        longitude:
+                          a.lng
+
+                      }
+
+                    }
+
+                  },
+
+                  destination: {
+
+                    location: {
+
+                      latLng: {
+
+                        latitude:
+                          b.lat,
+
+                        longitude:
+                          b.lng
+
+                      }
+
+                    }
+
+                  },
+
+                  travelMode:
+                    'DRIVE',
+
+                  routingPreference:
+                    'TRAFFIC_AWARE',
+
+                  polylineQuality:
+                    'OVERVIEW',
+
+                  polylineEncoding:
+                    'GEO_JSON_LINESTRING',
+
+                  computeAlternativeRoutes:
+                    false,
+
+                  units:
+                    'METRIC'
+
+                }),
+
+              signal:
+                AbortSignal.timeout(
+                  15000
+                )
+
+            }
+
+          );
+
+
+        if (
+          !response.ok
+        ) {
+
+          throw await readGoogleError(
+            response,
+            `Google Routes failed (${response.status})`
+          );
+
         }
 
-        if (!response.ok) {
-          const error =
-            new Error(
-              `Routing service unavailable (${response.status})`
-            );
-
-          error.statusCode = 502;
-
-          throw error;
-        }
 
         let data;
 
+
         try {
+
           data =
             await response.json();
+
         } catch {
+
           const error =
             new Error(
-              'Routing service returned an invalid response'
+              'Google Routes returned an invalid response'
             );
 
-          error.statusCode = 502;
+
+          error.statusCode =
+            502;
+
 
           throw error;
+
         }
+
 
         const route =
           data?.routes?.[0];
 
+
         if (
-          data?.code !== 'Ok' ||
           !route
         ) {
+
           const error =
             new Error(
-              data?.message ||
               'No drivable route was found between these locations'
             );
 
-          error.statusCode = 400;
+
+          error.statusCode =
+            400;
+
 
           throw error;
+
         }
 
+
+        /*
+         * Google duration is returned as a protobuf
+         * Duration string such as:
+         *
+         *   "123s"
+         */
+
+        const durationSeconds =
+          parseDurationSeconds(
+            route.duration
+          );
+
+
+        const distanceMeters =
+          Number(
+            route.distanceMeters
+          );
+
+
+        if (
+          !Number.isFinite(
+            distanceMeters
+          ) ||
+          distanceMeters < 0
+        ) {
+
+          const error =
+            new Error(
+              'Google Routes returned an invalid distance'
+            );
+
+
+          error.statusCode =
+            502;
+
+
+          throw error;
+
+        }
+
+
         const output = {
+
           distanceKm:
             Number(
               (
-                route.distance /
+                distanceMeters /
                 1000
               ).toFixed(1)
             ),
@@ -644,17 +1061,21 @@ async function getRoute(
             Math.max(
               1,
               Math.ceil(
-                route.duration /
+                durationSeconds /
                 60
               )
             ),
 
           geometry:
-            route.geometry,
+            route?.polyline
+              ?.geoJsonLinestring ||
+            null,
 
           source:
-            'osrm'
+            'google'
+
         };
+
 
         cacheSet(
           routeCache,
@@ -663,19 +1084,149 @@ async function getRoute(
           ROUTE_CACHE_TTL
         );
 
+
         return output;
+
+      } catch (
+        error
+      ) {
+
+        if (
+          error?.name ===
+          'AbortError'
+        ) {
+
+          const timeoutError =
+            new Error(
+              'Routing service timed out. Please try again.'
+            );
+
+
+          timeoutError.statusCode =
+            504;
+
+
+          throw timeoutError;
+
+        }
+
+
+        if (
+          error?.statusCode
+        ) {
+
+          throw error;
+
+        }
+
+
+        const networkError =
+          new Error(
+            'Google routing service is temporarily unavailable'
+          );
+
+
+        networkError.statusCode =
+          502;
+
+
+        networkError.cause =
+          error;
+
+
+        throw networkError;
+
       } finally {
-        routeInflight.delete(key);
+
+        routeInflight.delete(
+          key
+        );
+
       }
+
     })();
+
 
   routeInflight.set(
     key,
     promise
   );
 
+
   return promise;
+
 }
+
+
+/*
+ * ---------------------------------------------------------
+ * GOOGLE DURATION PARSER
+ * ---------------------------------------------------------
+ */
+
+function parseDurationSeconds(
+  duration
+) {
+
+  if (
+    typeof duration ===
+    'number'
+  ) {
+
+    return Number.isFinite(
+      duration
+    )
+      ? duration
+      : 0;
+
+  }
+
+
+  const text =
+    String(
+      duration || ''
+    ).trim();
+
+
+  if (!text) {
+
+    return 0;
+
+  }
+
+
+  const match =
+    text.match(
+      /^(-?\d+(?:\.\d+)?)s$/
+    );
+
+
+  if (
+    !match
+  ) {
+
+    return 0;
+
+  }
+
+
+  const seconds =
+    Number(
+      match[1]
+    );
+
+
+  return Number.isFinite(
+    seconds
+  )
+    ? Math.max(
+        0,
+        seconds
+      )
+    : 0;
+
+}
+
 
 /*
  * ---------------------------------------------------------
@@ -684,7 +1235,11 @@ async function getRoute(
  */
 
 module.exports = {
+
   searchKaduna,
+
   getRoute,
+
   validatePoint
+
 };
