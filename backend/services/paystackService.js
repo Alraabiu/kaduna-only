@@ -10,7 +10,7 @@
    - Bank list with TTL cache + pagination safety
    - Recipient creation reuse support
    - Webhook HMAC verification (timing-safe)
-   - Auto-detect bank from account number
+   - Auto-detect bank from account number (with debug logs)
    ========================================================= */
 
 const crypto = require('crypto');
@@ -464,7 +464,8 @@ async function resolveBankAccount({ accountNumber, bankCode }) {
    =========================================================
    Paystack has no "account → bank" endpoint. We loop through
    a curated list of popular Nigerian banks and return the
-   first one whose resolve call succeeds.
+   first one whose resolve call succeeds WITH a non-empty
+   account name.
    ========================================================= */
 
 const AUTO_DETECT_BANKS = [
@@ -493,6 +494,13 @@ const AUTO_DETECT_BANKS = [
 /**
  * Tries to detect the bank + resolve the account name from just
  * a 10-digit account number.
+ *
+ * Runs in batches of 5 parallel requests, stops at the first
+ * bank that returns a non-empty account name.
+ *
+ * Returns:
+ *   { detected: true, bankName, bankCode, accountName, accountNumber }
+ *   { detected: false }
  */
 async function autoResolveAccountNumber({ accountNumber }) {
   const account = String(accountNumber || '').replace(/\s+/g, '');
@@ -517,15 +525,30 @@ async function autoResolveAccountNumber({ accountNumber }) {
             bankCode: bank.code,
           });
 
+          // Paystack returns the account name in `data.account_name`
           const accountName = String(res?.data?.account_name || '').trim();
 
-          if (accountName) {
+          // ⚠️ CRITICAL: only accept if name is a real, non-empty string
+          if (accountName && accountName.length >= 3) {
+            console.log(
+              `[AUTO-DETECT] ✓ matched ${bank.name} (${bank.code}) → ${accountName}`
+            );
             return { bank, accountName };
           }
-        } catch {
-          // Wrong bank — skip silently
+
+          console.log(
+            `[AUTO-DETECT] ${bank.name} (${bank.code}) returned empty name`
+          );
+          return null;
+        } catch (err) {
+          // Wrong bank for this account number → expected, skip silently
+          console.log(
+            `[AUTO-DETECT] ${bank.name} (${bank.code}) failed: ${
+              err?.paystackResponse?.message || err?.message || 'unknown'
+            }`
+          );
+          return null;
         }
-        return null;
       })
     );
 
@@ -542,6 +565,7 @@ async function autoResolveAccountNumber({ accountNumber }) {
     }
   }
 
+  console.log(`[AUTO-DETECT] ✗ no bank matched account ${account}`);
   return { detected: false };
 }
 
