@@ -16,16 +16,17 @@ const {
   newTransferReference,
 } = require('../services/paystackService');
 
-
 const minimum = () =>
+
   Math.max(
+
     100,
+
     Number(
-      process.env.WITHDRAWAL_MINIMUM || 1000
+      process.env.WITHDRAWAL_MINIMUM || 100
     )
+
   );
-
-
 const ref = () =>
   `WD-${Date.now().toString(36).toUpperCase()}-${Math.random()
     .toString(36)
