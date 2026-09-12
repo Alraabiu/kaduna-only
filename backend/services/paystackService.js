@@ -139,14 +139,23 @@ async function request(path, options = {}) {
 
     /* -------------------- ERROR HANDLING -------------------- */
 
-    if (!response.ok || !body.status) {
-      throw paystackError(
-        body.message || `Paystack request failed (${response.status})`,
-        normaliseStatus(response.status),
-        body
-      );
-    }
+    if (!response.ok || body.status === false) {
 
+  console.error('[PAYSTACK API FAILED]', {
+    path,
+    httpStatus: response.status,
+    message: body?.message,
+    body
+  });
+
+
+  throw paystackError(
+    body?.message ||
+      `Paystack request failed (${response.status})`,
+    normaliseStatus(response.status),
+    body
+  );
+}
     return body;
   } catch (e) {
     if (e?.name === 'AbortError') {
@@ -527,43 +536,243 @@ async function createTransferRecipient({
     }),
   });
 }
-
-/* =========================================================
-   INITIATE TRANSFER
-   ========================================================= */
-
 async function initiateTransfer({
   amount,
   recipientCode,
   reference,
-  reason = 'Kaduna Only wallet withdrawal',
+  reason = 'Kaduna Only wallet withdrawal'
 }) {
-  const numeric = Number(amount);
 
-  if (!Number.isInteger(numeric) || numeric <= 0) {
+  const numericAmount = Number(amount);
+
+
+  // ---------------------------------------------
+  // VALIDATION
+  // ---------------------------------------------
+
+  if (
+    !Number.isInteger(numericAmount) ||
+    numericAmount <= 0
+  ) {
     throw Object.assign(
       new Error('Transfer amount must be a positive whole naira amount'),
-      { statusCode: 400 }
+      {
+        statusCode: 400
+      }
     );
   }
 
-  if (!recipientCode || !reference) {
+
+  if (!recipientCode) {
     throw Object.assign(
-      new Error('Transfer recipient and reference are required'),
-      { statusCode: 400 }
+      new Error('Transfer recipient code is required'),
+      {
+        statusCode: 400
+      }
     );
   }
 
-  return request('/transfer', {
-    method: 'POST',
-    body: JSON.stringify({
-      source: 'balance',
-      amount: numeric * 100, // kobo
-      recipient: recipientCode,
+
+  if (!reference) {
+    throw Object.assign(
+      new Error('Transfer reference is required'),
+      {
+        statusCode: 400
+      }
+    );
+  }
+
+
+
+  // ---------------------------------------------
+  // PAYSTACK USES KOBO
+  // ₦500 = 50000
+  // ---------------------------------------------
+
+  const amountInKobo =
+    Math.round(numericAmount * 100);
+
+
+
+  const payload = {
+
+    source:
+      'balance',
+
+    amount:
+      amountInKobo,
+
+    recipient:
+      recipientCode,
+
+    reference,
+
+    reason
+
+  };
+
+
+
+  console.log(
+    '[PAYSTACK TRANSFER REQUEST]',
+    {
+      amountNaira:
+        numericAmount,
+
+      amountKobo:
+        amountInKobo,
+
+      recipientCode,
+
       reference,
-      reason,
-    }),
-  });
+
+      reason
+
+    }
+  );
+
+
+
+  // ---------------------------------------------
+  // SEND TRANSFER
+  // ---------------------------------------------
+
+  try {
+
+
+    const response =
+      await request(
+        '/transfer',
+        {
+          method:
+            'POST',
+
+          body:
+            JSON.stringify(payload)
+        }
+      );
+
+
+
+    console.log(
+      '[PAYSTACK TRANSFER RESPONSE]',
+      {
+
+        paystackStatus:
+          response?.status,
+
+        message:
+          response?.message,
+
+        transferId:
+          response?.data?.id,
+
+        transferCode:
+          response?.data?.transfer_code,
+
+        transferStatus:
+          response?.data?.status,
+
+        reference:
+          response?.data?.reference
+
+      }
+    );
+
+
+
+    // ---------------------------------------------
+    // VERIFY RESPONSE
+    // ---------------------------------------------
+
+    if (
+  !response ||
+  response.status !== true ||
+  !response.data
+) {
+
+
+      const error =
+        new Error(
+          response?.message ||
+          'Paystack transfer was not successful'
+        );
+
+
+      error.statusCode =
+        502;
+
+
+      error.paystackResponse =
+        response;
+
+
+      throw error;
+
+    }
+
+
+
+    if (!response.data) {
+
+
+      const error =
+        new Error(
+          'Paystack returned no transfer data'
+        );
+
+
+      error.statusCode =
+        502;
+
+
+      error.paystackResponse =
+        response;
+
+
+      throw error;
+
+    }
+
+
+
+   return {
+  ...response,
+  transferId: response.data.id,
+  transferStatus: response.data.status,
+  transferReference: response.data.reference
+};
+
+
+
+  } catch (error) {
+
+
+    console.error(
+      '[PAYSTACK TRANSFER ERROR]',
+      {
+
+        message:
+          error?.message,
+
+        statusCode:
+          error?.statusCode,
+
+        paystackResponse:
+          error?.paystackResponse,
+
+        stack:
+          error?.stack
+
+      }
+    );
+
+
+
+    throw error;
+
+  }
+
 }
 
 /* =========================================================

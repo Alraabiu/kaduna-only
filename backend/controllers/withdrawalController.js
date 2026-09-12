@@ -520,6 +520,7 @@ async function requestWalletWithdrawal(req, res, next) {
         );
       }
     } catch (transferError) {
+
       /* =========================================================
          TRANSFER FAILED (or non-success status)
          =========================================================
@@ -531,16 +532,17 @@ async function requestWalletWithdrawal(req, res, next) {
          the bank credit (double-pay).
       ========================================================= */
 
-      console.error('[WITHDRAWAL TRANSFER ERROR]', {
-        withdrawalId: String(withdrawal._id),
-        reference,
-        transferReference,
-        transferInitiated,
-        amount,
-        message: transferError?.message,
-        statusCode: transferError?.statusCode,
-        paystackResponse: transferError?.paystackResponse,
-      });
+      console.error('[WITHDRAWAL TRANSFER ERROR FULL]', JSON.stringify({
+  withdrawalId: String(withdrawal._id),
+  reference,
+  transferReference,
+  transferInitiated,
+  amount,
+  message: transferError?.message,
+  statusCode: transferError?.statusCode,
+  paystackResponse: transferError?.paystackResponse,
+  error: transferError
+}, null, 2));
 
       let safeToRefund = !transferInitiated;
       let paystackStatus = 'unknown';
