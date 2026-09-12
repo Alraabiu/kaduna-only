@@ -1,5 +1,5 @@
 /* =========================================================
-   KADUNA ONLY — PAYSTACK SERVICE (UPGRADED)
+   KADUNA ONLY — PAYSTACK SERVICE (FULL)
    =========================================================
    Features:
    - Strict API key validation (prefix + minimum length)
@@ -10,6 +10,7 @@
    - Bank list with TTL cache + pagination safety
    - Recipient creation reuse support
    - Webhook HMAC verification (timing-safe)
+   - Auto-detect bank from account number
    ========================================================= */
 
 const crypto = require('crypto');
@@ -46,7 +47,6 @@ function secret() {
     );
   }
 
-  // Prefix + length check (real keys are ~48+ chars after "sk_test_"/"sk_live_")
   if (!/^sk_(test|live)_[A-Za-z0-9]{30,}$/.test(key)) {
     throw Object.assign(
       new Error(
@@ -74,9 +74,6 @@ function mode() {
    ERROR HELPERS
    ========================================================= */
 
-/**
- * Normalises Paystack HTTP status into an internal statusCode.
- */
 function normaliseStatus(httpStatus) {
   if (httpStatus === 400) return 400;
   if (httpStatus === 401 || httpStatus === 403) return 502;
@@ -88,9 +85,6 @@ function normaliseStatus(httpStatus) {
   return 502;
 }
 
-/**
- * Creates a rich error object with Paystack response attached.
- */
 function paystackError(message, statusCode, paystackResponse) {
   return Object.assign(new Error(message), {
     statusCode,
@@ -129,33 +123,21 @@ async function request(path, options = {}) {
       };
     }
 
-    /* -------------------- 429 RATE LIMIT RETRY -------------------- */
-
+    /* 429 RATE LIMIT RETRY */
     if (response.status === 429 && !options.__retried) {
       clearTimeout(timeout);
       await new Promise((r) => setTimeout(r, RATE_LIMIT_RETRY_DELAY_MS));
       return request(path, { ...options, __retried: true });
     }
 
-    /* -------------------- ERROR HANDLING -------------------- */
+    if (!response.ok || !body.status) {
+      throw paystackError(
+        body.message || `Paystack request failed (${response.status})`,
+        normaliseStatus(response.status),
+        body
+      );
+    }
 
-    if (!response.ok || body.status === false) {
-
-  console.error('[PAYSTACK API FAILED]', {
-    path,
-    httpStatus: response.status,
-    message: body?.message,
-    body
-  });
-
-
-  throw paystackError(
-    body?.message ||
-      `Paystack request failed (${response.status})`,
-    normaliseStatus(response.status),
-    body
-  );
-}
     return body;
   } catch (e) {
     if (e?.name === 'AbortError') {
@@ -220,7 +202,7 @@ async function initializeWalletTopup({ user, amount }) {
     method: 'POST',
     body: JSON.stringify({
       email,
-      amount: String(numeric * 100), // kobo
+      amount: String(numeric * 100),
       currency: 'NGN',
       reference,
       callback_url: `${callbackBase}/wallet/paystack/callback`,
@@ -292,8 +274,6 @@ async function fulfillWalletTopup(payment, data) {
     });
   }
 
-  /* --- Non-success statuses --- */
-
   if (data.status !== 'success') {
     await Payment.updateOne(
       { _id: payment._id },
@@ -310,8 +290,6 @@ async function fulfillWalletTopup(payment, data) {
     return { credited: false, status: data.status };
   }
 
-  /* --- Amount integrity check --- */
-
   if (Number(data.amount) !== Math.round(Number(payment.amount) * 100)) {
     throw Object.assign(
       new Error('Verified payment amount does not match the wallet top-up'),
@@ -319,15 +297,11 @@ async function fulfillWalletTopup(payment, data) {
     );
   }
 
-  /* --- Currency check --- */
-
   if (String(data.currency || 'NGN').toUpperCase() !== 'NGN') {
     throw Object.assign(new Error('Unexpected payment currency'), {
       statusCode: 400,
     });
   }
-
-  /* --- Atomic wallet credit (idempotent via $ne filter) --- */
 
   const wallet = await Wallet.findOneAndUpdate(
     {
@@ -355,8 +329,6 @@ async function fulfillWalletTopup(payment, data) {
   if (!existing) {
     throw new Error('Wallet not found');
   }
-
-  /* --- Mark payment as success --- */
 
   await Payment.updateOne(
     { _id: payment._id },
@@ -413,7 +385,6 @@ let bankCache = null;
 let bankCacheExpiresAt = 0;
 
 async function listNigerianBanks({ forceRefresh = false } = {}) {
-  /* --- Return cached --- */
   if (!forceRefresh && bankCache && Date.now() < bankCacheExpiresAt) {
     return { status: true, data: bankCache };
   }
@@ -429,11 +400,9 @@ async function listNigerianBanks({ forceRefresh = false } = {}) {
     const rows = Array.isArray(r.data) ? r.data : [];
     all.push(...rows);
 
-    /* Safety: stop if fewer rows than page size, or last page reached */
     if (rows.length < BANK_PAGE_SIZE || page >= MAX_BANK_PAGES) break;
   }
 
-  /* --- Deduplicate by (code + name) --- */
   const map = new Map();
 
   for (const b of all) {
@@ -455,9 +424,7 @@ async function listNigerianBanks({ forceRefresh = false } = {}) {
     }
   }
 
-  bankCache = [...map.values()].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  bankCache = [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   bankCacheExpiresAt = Date.now() + BANK_CACHE_TTL_MS;
 
   return { status: true, data: bankCache };
@@ -490,6 +457,92 @@ async function resolveBankAccount({ accountNumber, bankCode }) {
     )}&bank_code=${encodeURIComponent(code)}`,
     { method: 'GET' }
   );
+}
+
+/* =========================================================
+   AUTO-DETECT BANK FROM ACCOUNT NUMBER
+   =========================================================
+   Paystack has no "account → bank" endpoint. We loop through
+   a curated list of popular Nigerian banks and return the
+   first one whose resolve call succeeds.
+   ========================================================= */
+
+const AUTO_DETECT_BANKS = [
+  { code: '999992', name: 'OPay Digital Services Limited (OPay)' },
+  { code: '999991', name: 'PalmPay' },
+  { code: '50211',  name: 'Kuda Bank' },
+  { code: '999983', name: 'Moniepoint MFB' },
+  { code: '058',    name: 'GTBank' },
+  { code: '044',    name: 'Access Bank' },
+  { code: '057',    name: 'Zenith Bank' },
+  { code: '011',    name: 'First Bank' },
+  { code: '033',    name: 'UBA' },
+  { code: '070',    name: 'Fidelity Bank' },
+  { code: '214',    name: 'FCMB' },
+  { code: '035',    name: 'Wema Bank' },
+  { code: '232',    name: 'Sterling Bank' },
+  { code: '076',    name: 'Polaris Bank' },
+  { code: '221',    name: 'Stanbic IBTC' },
+  { code: '030',    name: 'Heritage Bank' },
+  { code: '082',    name: 'Keystone Bank' },
+  { code: '101',    name: 'Providus Bank' },
+  { code: '100',    name: 'Suntrust Bank' },
+  { code: '302',    name: 'TAJ Bank' },
+];
+
+/**
+ * Tries to detect the bank + resolve the account name from just
+ * a 10-digit account number.
+ */
+async function autoResolveAccountNumber({ accountNumber }) {
+  const account = String(accountNumber || '').replace(/\s+/g, '');
+
+  if (!/^\d{10}$/.test(account)) {
+    throw Object.assign(
+      new Error('Account number must be exactly 10 digits'),
+      { statusCode: 400 }
+    );
+  }
+
+  const BATCH_SIZE = 5;
+
+  for (let i = 0; i < AUTO_DETECT_BANKS.length; i += BATCH_SIZE) {
+    const batch = AUTO_DETECT_BANKS.slice(i, i + BATCH_SIZE);
+
+    const results = await Promise.all(
+      batch.map(async (bank) => {
+        try {
+          const res = await resolveBankAccount({
+            accountNumber: account,
+            bankCode: bank.code,
+          });
+
+          const accountName = String(res?.data?.account_name || '').trim();
+
+          if (accountName) {
+            return { bank, accountName };
+          }
+        } catch {
+          // Wrong bank — skip silently
+        }
+        return null;
+      })
+    );
+
+    const hit = results.find((r) => r !== null);
+
+    if (hit) {
+      return {
+        detected: true,
+        bankName: hit.bank.name,
+        bankCode: hit.bank.code,
+        accountName: hit.accountName,
+        accountNumber: account,
+      };
+    }
+  }
+
+  return { detected: false };
 }
 
 /* =========================================================
@@ -536,243 +589,43 @@ async function createTransferRecipient({
     }),
   });
 }
+
+/* =========================================================
+   INITIATE TRANSFER
+   ========================================================= */
+
 async function initiateTransfer({
   amount,
   recipientCode,
   reference,
-  reason = 'Kaduna Only wallet withdrawal'
+  reason = 'Kaduna Only wallet withdrawal',
 }) {
+  const numeric = Number(amount);
 
-  const numericAmount = Number(amount);
-
-
-  // ---------------------------------------------
-  // VALIDATION
-  // ---------------------------------------------
-
-  if (
-    !Number.isInteger(numericAmount) ||
-    numericAmount <= 0
-  ) {
+  if (!Number.isInteger(numeric) || numeric <= 0) {
     throw Object.assign(
       new Error('Transfer amount must be a positive whole naira amount'),
-      {
-        statusCode: 400
-      }
+      { statusCode: 400 }
     );
   }
 
-
-  if (!recipientCode) {
+  if (!recipientCode || !reference) {
     throw Object.assign(
-      new Error('Transfer recipient code is required'),
-      {
-        statusCode: 400
-      }
+      new Error('Transfer recipient and reference are required'),
+      { statusCode: 400 }
     );
   }
 
-
-  if (!reference) {
-    throw Object.assign(
-      new Error('Transfer reference is required'),
-      {
-        statusCode: 400
-      }
-    );
-  }
-
-
-
-  // ---------------------------------------------
-  // PAYSTACK USES KOBO
-  // ₦500 = 50000
-  // ---------------------------------------------
-
-  const amountInKobo =
-    Math.round(numericAmount * 100);
-
-
-
-  const payload = {
-
-    source:
-      'balance',
-
-    amount:
-      amountInKobo,
-
-    recipient:
-      recipientCode,
-
-    reference,
-
-    reason
-
-  };
-
-
-
-  console.log(
-    '[PAYSTACK TRANSFER REQUEST]',
-    {
-      amountNaira:
-        numericAmount,
-
-      amountKobo:
-        amountInKobo,
-
-      recipientCode,
-
+  return request('/transfer', {
+    method: 'POST',
+    body: JSON.stringify({
+      source: 'balance',
+      amount: numeric * 100,
+      recipient: recipientCode,
       reference,
-
-      reason
-
-    }
-  );
-
-
-
-  // ---------------------------------------------
-  // SEND TRANSFER
-  // ---------------------------------------------
-
-  try {
-
-
-    const response =
-      await request(
-        '/transfer',
-        {
-          method:
-            'POST',
-
-          body:
-            JSON.stringify(payload)
-        }
-      );
-
-
-
-    console.log(
-      '[PAYSTACK TRANSFER RESPONSE]',
-      {
-
-        paystackStatus:
-          response?.status,
-
-        message:
-          response?.message,
-
-        transferId:
-          response?.data?.id,
-
-        transferCode:
-          response?.data?.transfer_code,
-
-        transferStatus:
-          response?.data?.status,
-
-        reference:
-          response?.data?.reference
-
-      }
-    );
-
-
-
-    // ---------------------------------------------
-    // VERIFY RESPONSE
-    // ---------------------------------------------
-
-    if (
-  !response ||
-  response.status !== true ||
-  !response.data
-) {
-
-
-      const error =
-        new Error(
-          response?.message ||
-          'Paystack transfer was not successful'
-        );
-
-
-      error.statusCode =
-        502;
-
-
-      error.paystackResponse =
-        response;
-
-
-      throw error;
-
-    }
-
-
-
-    if (!response.data) {
-
-
-      const error =
-        new Error(
-          'Paystack returned no transfer data'
-        );
-
-
-      error.statusCode =
-        502;
-
-
-      error.paystackResponse =
-        response;
-
-
-      throw error;
-
-    }
-
-
-
-   return {
-  ...response,
-  transferId: response.data.id,
-  transferStatus: response.data.status,
-  transferReference: response.data.reference
-};
-
-
-
-  } catch (error) {
-
-
-    console.error(
-      '[PAYSTACK TRANSFER ERROR]',
-      {
-
-        message:
-          error?.message,
-
-        statusCode:
-          error?.statusCode,
-
-        paystackResponse:
-          error?.paystackResponse,
-
-        stack:
-          error?.stack
-
-      }
-    );
-
-
-
-    throw error;
-
-  }
-
+      reason,
+    }),
+  });
 }
 
 /* =========================================================
@@ -809,4 +662,5 @@ module.exports = {
   verifyTransfer,
   newTransferReference,
   mode,
+  autoResolveAccountNumber,
 };
