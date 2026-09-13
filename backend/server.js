@@ -227,6 +227,11 @@ app.use(
 );
 
 app.use(
+  '/api/staff',
+  require('./routes/staff.routes')
+);
+
+app.use(
   '/api/push',
   require('./routes/push.routes')
 );
