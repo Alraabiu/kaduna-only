@@ -195,19 +195,17 @@ const schema = new mongoose.Schema({
   },
 
 
-  permissions: {
+ permissions: {
 
-    type: [
+  type: [
 
-      String
+    String
 
-    ],
+  ],
 
-    default: [],
+  default: []
 
-    index: true
-
-  },
+},
 
 
 
