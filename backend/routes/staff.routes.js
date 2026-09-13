@@ -35,5 +35,24 @@ router.get(
 );
 
 
+/*
+==========================================
+STAFF ACTIVE TRIPS
+==========================================
+*/
+
+router.get(
+
+  '/trips',
+
+  requireRole(
+    'staff_operations',
+    'customer_support',
+    'dispatcher'
+  ),
+
+  c.trips
+
+);
 
 module.exports = router;

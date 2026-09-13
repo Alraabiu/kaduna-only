@@ -6,6 +6,64 @@ const Wallet = require('../models/Wallet');
 
 /*
 =================================================
+STAFF ACTIVE TRIPS
+=================================================
+*/
+
+async function trips(req,res,next){
+
+  try {
+
+    const activeTrips = await Trip.find({
+
+      status:{
+        $in:[
+          'SEARCHING_DRIVER',
+          'DRIVER_ASSIGNED',
+          'DRIVER_ARRIVING',
+          'DRIVER_ARRIVED',
+          'TRIP_STARTED'
+        ]
+      }
+
+    })
+
+    .populate(
+      'rider',
+      'fullName phone'
+    )
+
+    .populate(
+      'driver',
+      'fullName phone'
+    )
+
+    .sort({
+      createdAt:-1
+    });
+
+
+    res.json({
+
+      success:true,
+
+      data:{
+        trips:activeTrips
+      }
+
+    });
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+/*
+=================================================
 STAFF DASHBOARD
 =================================================
 */
