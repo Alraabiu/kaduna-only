@@ -1,6 +1,34 @@
 const User=require('../models/User');
 const DriverProfile=require('../models/DriverProfile');
 
+/*
+=========================================================
+VEHICLE CAPACITY RULES
+=========================================================
+*/
+
+const VEHICLE_CAPACITY = {
+
+  bike: 1,
+
+  keke: 4,
+
+  car: 4,
+
+  suv: 6
+
+};
+
+
+function getVehicleCapacity(vehicleType){
+
+  return (
+    VEHICLE_CAPACITY[vehicleType] ||
+    1
+  );
+
+}
+
 let messaging=null;
 let initialized=false;
 
@@ -69,13 +97,271 @@ async function sendToUser(userId,payload){
   return sendTokens((user?.pushTokens||[]).map(x=>x.token),payload);
 }
 
-async function sendToMatchingDrivers(vehicleType,payload){
-  if(!vehicleType)return {sent:0,failed:0,enabled:pushEnabled()};
-  const profiles=await DriverProfile.find({verificationStatus:'approved',online:true,vehicleType}).select('user');
-  const ids=profiles.map(p=>p.user);
-  if(!ids.length)return {sent:0,failed:0,enabled:pushEnabled()};
-  const users=await User.find({_id:{$in:ids},status:'active',role:'driver'}).select('pushTokens');
-  return sendTokens(users.flatMap(u=>(u.pushTokens||[]).map(x=>x.token)),payload);
+async function sendToMatchingDrivers(
+  {
+    vehicleType,
+    rideType = 'single_seat'
+  },
+  payload
+){
+
+  if(!vehicleType){
+
+    return {
+      sent:0,
+      failed:0,
+      enabled:pushEnabled()
+    };
+
+  }
+
+
+  /*
+   =========================================================
+   FIND ONLINE APPROVED DRIVERS
+   =========================================================
+  */
+
+  const profiles =
+    await DriverProfile.find({
+
+      verificationStatus:
+        'approved',
+
+      online:
+        true,
+
+      vehicleType
+
+    })
+    .select('user');
+
+
+
+  const driverIds =
+    profiles.map(
+      profile => profile.user
+    );
+
+
+  if(!driverIds.length){
+
+    return {
+      sent:0,
+      failed:0,
+      enabled:pushEnabled()
+    };
+
+  }
+
+
+
+  /*
+   =========================================================
+   CHECK DRIVER CURRENT TRIP STATUS
+   =========================================================
+  */
+
+  const Trip =
+    require('../models/Trip');
+
+
+  const activeTrips =
+    await Trip.find({
+
+      driver:{
+        $in:driverIds
+      },
+
+      status:{
+        $in:[
+
+          'DRIVER_ASSIGNED',
+          'DRIVER_ARRIVING',
+          'DRIVER_ARRIVED',
+          'TRIP_STARTED'
+
+        ]
+      }
+
+    });
+
+
+
+  const blockedDrivers =
+    new Set();
+
+
+  const driverSeats =
+    {};
+
+
+
+  activeTrips.forEach(trip => {
+
+
+    const driverId =
+      String(trip.driver);
+
+
+
+    /*
+     ---------------------------------------------
+     PRIVATE KEKE
+     ---------------------------------------------
+     Driver cannot receive any more requests.
+     */
+
+    if(
+      trip.vehicleType === 'keke' &&
+      trip.rideType === 'private'
+    ){
+
+      blockedDrivers.add(
+        driverId
+      );
+
+      return;
+
+    }
+
+
+
+    /*
+     ---------------------------------------------
+     OTHER VEHICLES
+     ---------------------------------------------
+     Only one active trip allowed.
+     */
+
+    if(
+      trip.vehicleType !== 'keke'
+    ){
+
+      blockedDrivers.add(
+        driverId
+      );
+
+      return;
+
+    }
+
+
+
+    /*
+     ---------------------------------------------
+     SHARED KEKE SEAT COUNT
+     ---------------------------------------------
+     */
+
+    if(
+      trip.vehicleType === 'keke' &&
+      trip.rideType === 'single_seat'
+    ){
+
+      driverSeats[driverId] =
+        (
+          driverSeats[driverId] || 0
+        )
+        +
+        Number(
+          trip.seatsOccupied || 1
+        );
+
+    }
+
+  });
+
+
+
+  /*
+   =========================================================
+   BLOCK FULL KEKES
+   =========================================================
+  */
+
+  Object.entries(driverSeats)
+    .forEach(([driverId,seats]) => {
+
+      if(
+  seats >= getVehicleCapacity('keke')
+){
+
+  blockedDrivers.add(
+    driverId
+  );
+
+}
+
+    });
+
+
+
+  /*
+   =========================================================
+   FINAL AVAILABLE DRIVERS
+   =========================================================
+  */
+
+  const availableDriverIds =
+    driverIds.filter(
+      id =>
+        !blockedDrivers.has(
+          String(id)
+        )
+    );
+
+
+  if(!availableDriverIds.length){
+
+    return {
+      sent:0,
+      failed:0,
+      enabled:pushEnabled()
+    };
+
+  }
+
+
+
+  /*
+   =========================================================
+   SEND NOTIFICATION
+   =========================================================
+  */
+
+  const users =
+    await User.find({
+
+      _id:{
+        $in:availableDriverIds
+      },
+
+      status:
+        'active',
+
+      role:
+        'driver'
+
+    })
+    .select('pushTokens');
+
+
+
+  return sendTokens(
+
+    users.flatMap(
+      user =>
+        (user.pushTokens || [])
+        .map(
+          token => token.token
+        )
+    ),
+
+    payload
+
+  );
+
 }
 
 module.exports={initPush,pushEnabled,sendToUser,sendToMatchingDrivers};

@@ -1,7 +1,3 @@
-/* =========================================================
-   KADUNA ONLY — WITHDRAWAL CONTROLLER (FULL)
-   ========================================================= */
-
 const crypto = require('crypto');
 const DriverProfile = require('../models/DriverProfile');
 const Wallet = require('../models/Wallet');
@@ -18,15 +14,13 @@ const {
   initiateTransfer,
   verifyTransfer,
   newTransferReference,
-  autoResolveAccountNumber,
 } = require('../services/paystackService');
 
 /* =========================================================
    CONSTANTS
    ========================================================= */
 
-const IS_PRODUCTION =
-  String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+const IS_PRODUCTION = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 
 /* =========================================================
    HELPERS
@@ -43,6 +37,10 @@ const ref = () =>
     .toString('hex')
     .toUpperCase()}`;
 
+/**
+ * Builds a safe, structured debug object for the client.
+ * Only included when NODE_ENV !== 'production'.
+ */
 function debugPayload(error) {
   if (IS_PRODUCTION) return undefined;
   return {
@@ -52,20 +50,33 @@ function debugPayload(error) {
   };
 }
 
+/**
+ * Extracts a compact, human-readable Paystack error message.
+ */
 function paystackErrorMessage(error) {
   const psMessage =
     error?.paystackResponse?.message ||
     error?.paystackResponse?.data?.message;
 
-  return psMessage || error?.message || 'Bank transfer failed.';
+  return (
+    psMessage ||
+    error?.message ||
+    'Bank transfer failed.'
+  );
 }
 
+/**
+ * Determines if a Paystack transfer status is terminal-success.
+ */
 function isTransferSuccess(status) {
   return ['success', 'successful', 'completed'].includes(
     String(status || '').toLowerCase()
   );
 }
 
+/**
+ * Determines if a Paystack transfer is still pending/processing.
+ */
 function isTransferPending(status) {
   return [
     'pending',
@@ -187,48 +198,6 @@ async function verifyAccount(req, res, next) {
 }
 
 /* =========================================================
-   AUTO-DETECT BANK FROM ACCOUNT NUMBER
-   ========================================================= */
-
-async function autoResolveAccount(req, res, next) {
-  try {
-    const accountNumber = clean(req.body.accountNumber).replace(/\s+/g, '');
-
-    if (!/^\d{10}$/.test(accountNumber)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Account number must be exactly 10 digits',
-      });
-    }
-
-    const result = await autoResolveAccountNumber({ accountNumber });
-
-    if (!result.detected) {
-      return res.json({
-        success: true,
-        data: {
-          detected: false,
-          message: 'Could not auto-detect bank. Please select manually.',
-        },
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        detected: true,
-        bankName: result.bankName,
-        bankCode: result.bankCode,
-        accountName: result.accountName,
-        accountNumber: result.accountNumber,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-/* =========================================================
    SAVE GENERIC USER BANK ACCOUNT
    ========================================================= */
 
@@ -240,6 +209,7 @@ async function saveGenericBankAccount(req, res, next) {
       return res.status(400).json({ success: false, message: bank.error });
     }
 
+    /* Confirm account with Paystack before saving. */
     const verified = await resolveBankAccount({
       accountNumber: bank.accountNumber,
       bankCode: bank.bankCode,
@@ -254,6 +224,7 @@ async function saveGenericBankAccount(req, res, next) {
       });
     }
 
+    /* Create (or reuse) a Paystack transfer recipient. */
     let recipientCode = bank.recipientCode;
 
     if (!recipientCode) {
@@ -285,7 +256,7 @@ async function saveGenericBankAccount(req, res, next) {
 }
 
 /* =========================================================
-   GENERIC WALLET WITHDRAWAL
+   GENERIC WALLET WITHDRAWAL  (the important one)
    ========================================================= */
 
 async function requestWalletWithdrawal(req, res, next) {
@@ -297,6 +268,8 @@ async function requestWalletWithdrawal(req, res, next) {
     const amount = Number(req.body.amount);
     const pin = clean(req.body.pin);
     const bank = validateBank(req.body);
+
+    /* -------------------- BASIC VALIDATION -------------------- */
 
     if (!Number.isInteger(amount) || amount < minimum()) {
       return res.status(400).json({
@@ -315,6 +288,8 @@ async function requestWalletWithdrawal(req, res, next) {
     if (bank.error) {
       return res.status(400).json({ success: false, message: bank.error });
     }
+
+    /* -------------------- LOAD USER -------------------- */
 
     const user = await User.findById(req.user._id).select('+walletPinHash');
 
@@ -348,6 +323,11 @@ async function requestWalletWithdrawal(req, res, next) {
       });
     }
 
+    /* -------------------- DUPLICATE WITHDRAWAL GUARD --------------------
+       Moved BEFORE Paystack recipient creation so we don't hit Paystack
+       if the user already has a pending withdrawal.
+    ------------------------------------------------------------------- */
+
     const existing = await Withdrawal.findOne({
       $or: [{ user: req.user._id }, { driver: req.user._id }],
       status: { $in: ['pending', 'approved', 'processing'] },
@@ -359,6 +339,8 @@ async function requestWalletWithdrawal(req, res, next) {
         message: 'You already have a withdrawal awaiting completion',
       });
     }
+
+    /* -------------------- VERIFY BANK AGAIN -------------------- */
 
     const verified = await resolveBankAccount({
       accountNumber: bank.accountNumber,
@@ -373,6 +355,8 @@ async function requestWalletWithdrawal(req, res, next) {
         message: 'Bank account could not be verified',
       });
     }
+
+    /* -------------------- CREATE / REUSE PAYSTACK RECIPIENT -------------------- */
 
     let recipientCode = bank.recipientCode;
 
@@ -393,6 +377,8 @@ async function requestWalletWithdrawal(req, res, next) {
       });
     }
 
+    /* -------------------- CREATE WITHDRAWAL RECORD -------------------- */
+
     const reference = ref();
 
     withdrawal = await Withdrawal.create({
@@ -409,6 +395,8 @@ async function requestWalletWithdrawal(req, res, next) {
       status: 'pending',
       fundsReservedAt: new Date(),
     });
+
+    /* -------------------- RESERVE WALLET FUNDS -------------------- */
 
     const wallet = await Wallet.findOneAndUpdate(
       {
@@ -439,6 +427,8 @@ async function requestWalletWithdrawal(req, res, next) {
         message: 'Insufficient available wallet balance',
       });
     }
+
+    /* -------------------- AUTOMATIC PAYSTACK TRANSFER -------------------- */
 
     transferReference = newTransferReference();
 
@@ -475,6 +465,8 @@ async function requestWalletWithdrawal(req, res, next) {
         }
       );
 
+      /* --- Verify transfer status --- */
+
       let verifiedTransfer = null;
 
       try {
@@ -488,7 +480,9 @@ async function requestWalletWithdrawal(req, res, next) {
       }
 
       const transferStatus = String(
-        verifiedTransfer?.data?.status || transfer?.data?.status || ''
+        verifiedTransfer?.data?.status ||
+          transfer?.data?.status ||
+          ''
       ).toLowerCase();
 
       if (isTransferSuccess(transferStatus)) {
@@ -513,8 +507,10 @@ async function requestWalletWithdrawal(req, res, next) {
 
         withdrawal.status = 'paid';
       } else if (isTransferPending(transferStatus)) {
+        // Still processing — leave as processing, admin or webhook resolves.
         withdrawal.status = 'processing';
       } else if (transferStatus) {
+        // Paystack returned a non-success, non-pending status.
         throw Object.assign(
           new Error(`Paystack transfer status: ${transferStatus}`),
           {
@@ -524,24 +520,29 @@ async function requestWalletWithdrawal(req, res, next) {
         );
       }
     } catch (transferError) {
-      console.error(
-        '[WITHDRAWAL TRANSFER ERROR FULL]',
-        JSON.stringify(
-          {
-            withdrawalId: String(withdrawal._id),
-            reference,
-            transferReference,
-            transferInitiated,
-            amount,
-            message: transferError?.message,
-            statusCode: transferError?.statusCode,
-            paystackResponse: transferError?.paystackResponse,
-            error: transferError,
-          },
-          null,
-          2
-        )
-      );
+
+      /* =========================================================
+         TRANSFER FAILED (or non-success status)
+         =========================================================
+
+         ⚠️ CRITICAL FIX:
+         Before refunding, verify with Paystack whether the transfer
+         was actually accepted. If Paystack says "pending" or "success",
+         DO NOT refund — otherwise the user gets both the refund AND
+         the bank credit (double-pay).
+      ========================================================= */
+
+      console.error('[WITHDRAWAL TRANSFER ERROR FULL]', JSON.stringify({
+  withdrawalId: String(withdrawal._id),
+  reference,
+  transferReference,
+  transferInitiated,
+  amount,
+  message: transferError?.message,
+  statusCode: transferError?.statusCode,
+  paystackResponse: transferError?.paystackResponse,
+  error: transferError
+}, null, 2));
 
       let safeToRefund = !transferInitiated;
       let paystackStatus = 'unknown';
@@ -551,24 +552,23 @@ async function requestWalletWithdrawal(req, res, next) {
           const check = await verifyTransfer(transferReference);
           paystackStatus = String(check?.data?.status || '').toLowerCase();
 
-          if (
-            isTransferSuccess(paystackStatus) ||
-            isTransferPending(paystackStatus)
-          ) {
+          if (isTransferSuccess(paystackStatus) || isTransferPending(paystackStatus)) {
+            // Paystack has it — do NOT refund.
             safeToRefund = false;
           } else {
+            // Paystack explicitly rejected/failed it — safe to refund.
             safeToRefund = true;
           }
         } catch (verifyErr) {
-          console.error(
-            '[WITHDRAWAL VERIFY ON FAILURE]',
-            verifyErr?.message
-          );
+          // We cannot verify → safest is to NOT refund automatically.
+          console.error('[WITHDRAWAL VERIFY ON FAILURE]', verifyErr?.message);
           safeToRefund = false;
         }
       }
 
       if (safeToRefund) {
+        /* --- Refund --- */
+
         const refundReference = `WITHDRAWAL-REFUND-${reference}`;
 
         await Wallet.findOneAndUpdate(
@@ -604,8 +604,7 @@ async function requestWalletWithdrawal(req, res, next) {
           {
             $set: {
               status: 'failed',
-              paystackStatus:
-                paystackStatus === 'unknown' ? 'failed' : paystackStatus,
+              paystackStatus: paystackStatus === 'unknown' ? 'failed' : paystackStatus,
               adminNote: paystackErrorMessage(transferError),
             },
           }
@@ -618,6 +617,8 @@ async function requestWalletWithdrawal(req, res, next) {
           debug: debugPayload(transferError),
         });
       }
+
+      /* --- Cannot safely refund → flag for admin review --- */
 
       await Withdrawal.updateOne(
         { _id: withdrawal._id },
@@ -640,7 +641,11 @@ async function requestWalletWithdrawal(req, res, next) {
       });
     }
 
+    /* -------------------- RELOAD FINAL STATE -------------------- */
+
     const updated = await Withdrawal.findById(withdrawal._id);
+
+    /* -------------------- NOTIFICATION -------------------- */
 
     sendToUser(req.user._id, {
       title:
@@ -649,12 +654,8 @@ async function requestWalletWithdrawal(req, res, next) {
           : 'Withdrawal processing',
       body:
         updated?.status === 'paid'
-          ? `₦${amount.toLocaleString(
-              'en-NG'
-            )} has been sent to your bank account.`
-          : `Your ₦${amount.toLocaleString(
-              'en-NG'
-            )} bank withdrawal is being processed.`,
+          ? `₦${amount.toLocaleString('en-NG')} has been sent to your bank account.`
+          : `Your ₦${amount.toLocaleString('en-NG')} bank withdrawal is being processed.`,
       url: '/wallet',
       tag: `withdrawal-${reference}`,
       data: {
@@ -672,6 +673,8 @@ async function requestWalletWithdrawal(req, res, next) {
       data: { withdrawal: updated, wallet },
     });
   } catch (error) {
+    /* -------------------- OUTER CLEANUP -------------------- */
+
     console.error('[WITHDRAWAL ERROR]', error);
 
     if (withdrawal) {
@@ -994,9 +997,7 @@ async function approve(req, res, next) {
 
     sendToUser(ownerId, {
       title: 'Withdrawal approved',
-      body: `Your ₦${w.amount.toLocaleString(
-        'en-NG'
-      )} withdrawal was approved.`,
+      body: `Your ₦${w.amount.toLocaleString('en-NG')} withdrawal was approved.`,
       url: '/wallet',
       tag: `withdrawal-approved-${w._id}`,
       data: { type: 'WITHDRAWAL_APPROVED', withdrawalId: w._id },
@@ -1059,9 +1060,7 @@ async function markPaid(req, res, next) {
 
     sendToUser(ownerId, {
       title: 'Withdrawal paid',
-      body: `₦${w.amount.toLocaleString(
-        'en-NG'
-      )} has been marked paid to your saved bank account.`,
+      body: `₦${w.amount.toLocaleString('en-NG')} has been marked paid to your saved bank account.`,
       url: '/wallet',
       tag: `withdrawal-paid-${w._id}`,
       data: { type: 'WITHDRAWAL_PAID', withdrawalId: w._id },
@@ -1140,9 +1139,7 @@ async function reject(req, res, next) {
 
     sendToUser(ownerId, {
       title: 'Withdrawal returned',
-      body: `Your ₦${w.amount.toLocaleString(
-        'en-NG'
-      )} withdrawal was rejected and returned to your wallet.`,
+      body: `Your ₦${w.amount.toLocaleString('en-NG')} withdrawal was rejected and returned to your wallet.`,
       url: '/wallet',
       tag: `withdrawal-rejected-${w._id}`,
       data: { type: 'WITHDRAWAL_REJECTED', withdrawalId: w._id },
@@ -1165,7 +1162,6 @@ async function reject(req, res, next) {
 module.exports = {
   listBanks,
   verifyAccount,
-  autoResolveAccount,
   getBankAccount: getGenericBankAccount,
   saveBankAccount: saveGenericBankAccount,
   requestWalletWithdrawal,
