@@ -55,4 +55,25 @@ router.get(
 
 );
 
+
+/*
+==========================================
+STAFF DRIVER MANAGEMENT
+==========================================
+*/
+
+router.get(
+
+  '/drivers',
+
+  requireRole(
+    'staff_operations',
+    'dispatcher'
+  ),
+
+  c.drivers
+
+);
+
+
 module.exports = router;

@@ -169,11 +169,55 @@ async function dashboard(req, res, next) {
 }
 
 
+/*
+=================================================
+STAFF DRIVER MANAGEMENT
+=================================================
+*/
+
+async function drivers(req,res,next){
+
+  try {
+
+    const drivers = await DriverProfile.find()
+
+      .populate(
+        'user',
+        'fullName phone email status'
+      )
+
+      .sort({
+        createdAt:-1
+      });
+
+
+    res.json({
+
+      success:true,
+
+      data:{
+        drivers
+      }
+
+    });
+
+
+  } catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
 
 module.exports = {
 
   dashboard,
 
-  trips
+  trips,
+
+  drivers
 
 };
