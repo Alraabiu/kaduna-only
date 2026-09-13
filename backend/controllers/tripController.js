@@ -1319,11 +1319,7 @@ const occupiedSeats =
     );
 
 
-const capacity =
-  Number(
-    d.passengerCapacity || 4
-  );
-
+const capacity = 4;
 
 /*
  * Keke is full.
@@ -1535,10 +1531,7 @@ const occupiedSeats =
   );
 
 
-const passengerCapacity =
-  Number(
-    d.passengerCapacity || 4
-  );
+const capacity = 4;
 
 
 if (occupiedSeats >= passengerCapacity) {
