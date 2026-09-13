@@ -1325,7 +1325,6 @@ const capacity = 4;
  * Keke is full.
  */
 if (
-  d.vehicleType === 'keke' &&
   occupiedSeats >= capacity
 ) {
 
