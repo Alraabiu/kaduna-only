@@ -1533,7 +1533,7 @@ const occupiedSeats =
 const capacity = 4;
 
 
-if (occupiedSeats >= passengerCapacity) {
+if (occupiedSeats >= capacity) {
 
   return res.status(409).json({
 
