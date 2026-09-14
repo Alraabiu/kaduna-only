@@ -7,6 +7,9 @@ const {
   requireRole
 } = require('../middleware/auth');
 
+const requirePermission =
+  require('../middleware/permission');
+
 
 router.use(requireAuth);
 
@@ -51,10 +54,13 @@ router.get(
     'dispatcher'
   ),
 
+  requirePermission(
+    'view_trips'
+  ),
+
   c.trips
 
 );
-
 
 /*
 ==========================================
@@ -70,6 +76,12 @@ router.get(
     'staff_operations',
     'dispatcher'
   ),
+
+
+requirePermission(
+  'view_drivers'
+),
+
 
   c.drivers
 
@@ -90,6 +102,11 @@ router.get(
     'staff_operations'
   ),
 
+requirePermission(
+  'view_withdrawals'
+),
+
+
   c.withdrawals
 
 );
@@ -109,6 +126,10 @@ router.get(
     'staff_operations'
   ),
 
+requirePermission(
+  'search_users'
+),
+
   c.searchUsers
 
 );
@@ -127,6 +148,10 @@ router.get(
     'customer_support',
     'staff_operations'
   ),
+
+requirePermission(
+  'view_trip_history'
+),
 
   c.userTrips
 
