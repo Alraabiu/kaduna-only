@@ -256,6 +256,82 @@ async function withdrawals(req,res,next){
 
 }
 
+/*
+=================================================
+STAFF USER SEARCH
+=================================================
+*/
+
+async function searchUsers(req,res,next){
+
+  try {
+
+    const query =
+      String(req.query.q || '').trim();
+
+
+    if(!query){
+
+      return res.status(400).json({
+
+        success:false,
+
+        message:'Search query required'
+
+      });
+
+    }
+
+
+    const users = await User.find({
+
+      $or:[
+
+        {
+          fullName:{
+            $regex:query,
+            $options:'i'
+          }
+        },
+
+        {
+          phone:{
+            $regex:query,
+            $options:'i'
+          }
+        }
+
+      ]
+
+    })
+
+    .select(
+      'fullName phone email role status'
+    )
+
+    .limit(20);
+
+
+
+    res.json({
+
+      success:true,
+
+      data:{
+        users
+      }
+
+    });
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
 module.exports = {
 
   dashboard,
@@ -264,6 +340,8 @@ module.exports = {
 
   drivers,
 
-  withdrawals
+  withdrawals,
+
+  searchUsers
 
 };

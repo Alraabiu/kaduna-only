@@ -94,5 +94,24 @@ router.get(
 
 );
 
+/*
+==========================================
+STAFF CUSTOMER SUPPORT
+==========================================
+*/
+
+router.get(
+
+  '/users/search',
+
+  requireRole(
+    'customer_support',
+    'staff_operations'
+  ),
+
+  c.searchUsers
+
+);
+
 
 module.exports = router;
