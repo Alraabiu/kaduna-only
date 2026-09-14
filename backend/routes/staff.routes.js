@@ -75,5 +75,24 @@ router.get(
 
 );
 
+/*
+==========================================
+STAFF FINANCE OPERATIONS
+==========================================
+*/
+
+router.get(
+
+  '/withdrawals',
+
+  requireRole(
+    'finance',
+    'staff_operations'
+  ),
+
+  c.withdrawals
+
+);
+
 
 module.exports = router;

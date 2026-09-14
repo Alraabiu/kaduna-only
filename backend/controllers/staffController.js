@@ -211,6 +211,50 @@ async function drivers(req,res,next){
 }
 
 
+/*
+=================================================
+STAFF WITHDRAWAL MANAGEMENT
+=================================================
+*/
+
+async function withdrawals(req,res,next){
+
+  try {
+
+    const withdrawals = await Wallet.find({
+
+      'withdrawals.status':'pending'
+
+    })
+
+    .populate(
+      'user',
+      'fullName phone'
+    )
+
+    .sort({
+      createdAt:-1
+    });
+
+
+    res.json({
+
+      success:true,
+
+      data:{
+        withdrawals
+      }
+
+    });
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
 
 module.exports = {
 
@@ -218,6 +262,8 @@ module.exports = {
 
   trips,
 
-  drivers
+  drivers,
+
+  withdrawals
 
 };
