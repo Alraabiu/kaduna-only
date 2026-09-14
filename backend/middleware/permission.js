@@ -35,11 +35,12 @@ function requirePermission(permission){
       }
 
 
+      /*
+      Admin bypass
+      */
 
       if(
-
         user.role === 'admin'
-
       ){
 
         return next();
@@ -50,7 +51,8 @@ function requirePermission(permission){
 
       const allowed =
 
-        user.permissions &&
+        Array.isArray(user.permissions) &&
+
         user.permissions.includes(permission);
 
 
@@ -62,12 +64,11 @@ function requirePermission(permission){
           success:false,
 
           message:
-            'You do not have permission for this action'
+          'You do not have permission for this action'
 
         });
 
       }
-
 
 
       next();
@@ -86,5 +87,4 @@ function requirePermission(permission){
 }
 
 
-
-module.exports = requirePermission;
+module.exports = requirePermission; 
