@@ -113,5 +113,25 @@ router.get(
 
 );
 
+/*
+==========================================
+STAFF USER TRIP HISTORY
+==========================================
+*/
+
+router.get(
+
+  '/users/:id/trips',
+
+  requireRole(
+    'customer_support',
+    'staff_operations'
+  ),
+
+  c.userTrips
+
+);
+
+
 
 module.exports = router;

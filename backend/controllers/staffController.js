@@ -332,6 +332,72 @@ async function searchUsers(req,res,next){
 
 }
 
+/*
+=================================================
+STAFF USER TRIP HISTORY
+=================================================
+*/
+
+async function userTrips(req,res,next){
+
+  try {
+
+    const trips = await Trip.find({
+
+      $or:[
+
+        {
+          rider:req.params.id
+        },
+
+        {
+          driver:req.params.id
+        }
+
+      ]
+
+    })
+
+    .populate(
+      'rider',
+      'fullName phone'
+    )
+
+    .populate(
+      'driver',
+      'fullName phone'
+    )
+
+    .sort({
+
+      createdAt:-1
+
+    })
+
+    .limit(50);
+
+
+
+    res.json({
+
+      success:true,
+
+      data:{
+        trips
+      }
+
+    });
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
 module.exports = {
 
   dashboard,
@@ -342,6 +408,8 @@ module.exports = {
 
   withdrawals,
 
-  searchUsers
+  searchUsers,
+
+  userTrips
 
 };
