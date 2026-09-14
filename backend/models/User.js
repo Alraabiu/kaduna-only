@@ -3,34 +3,52 @@ const mongoose = require('mongoose');
 
 /*
 =================================================
-PUSH TOKEN
+PUSH TOKEN SCHEMA
 =================================================
 */
 
 const pushTokenSchema = new mongoose.Schema({
 
   token: {
+
     type: String,
+
     required: true
+
   },
+
 
   deviceId: {
+
     type: String,
+
     default: 'web'
+
   },
+
 
   platform: {
+
     type: String,
+
     default: 'web'
+
   },
 
+
   updatedAt: {
+
     type: Date,
+
     default: Date.now
+
   }
 
+
 }, {
+
   _id: false
+
 });
 
 
@@ -43,159 +61,188 @@ USER MODEL
 
 const schema = new mongoose.Schema({
 
-  /*
-  ===============================================
-  BASIC INFORMATION
-  ===============================================
-  */
 
-  fullName: {
+/*
+=================================================
+BASIC INFORMATION
+=================================================
+*/
 
-    type: String,
 
-    required: true,
+fullName: {
 
-    trim: true
+  type: String,
 
-  },
+  required: true,
 
+  trim: true
 
-  phone: {
+},
 
-    type: String,
 
-    unique: true,
+phone: {
 
-    required: true,
+  type: String,
 
-    trim: true
+  required: true,
 
-  },
+  unique: true,
 
+  trim: true,
 
-  email: {
+  index: true
 
-    type: String,
+},
 
-    lowercase: true,
 
-    trim: true
+email: {
 
-  },
+  type: String,
 
+  lowercase: true,
 
-  passwordHash: {
+  trim: true,
 
-    type: String,
+  default: '',
 
-    required: true,
+  index: true
 
-    select: false
+},
 
-  },
 
+passwordHash: {
 
-  walletPinHash: {
+  type: String,
 
-    type: String,
+  required: true,
 
-    select: false
+  select: false
 
-  },
+},
 
 
+walletPinHash: {
 
-  /*
-  ===============================================
-  USER ROLE
-  ===============================================
-  */
+  type: String,
 
-  role: {
+  select: false
 
-    type: String,
+},
 
-    enum: [
 
-      'rider',
 
-      'driver',
+/*
+=================================================
+USER ROLE
+=================================================
+*/
 
-      'admin',
 
-      'staff_operations',
+role: {
 
-      'customer_support',
+  type: String,
 
-      'dispatcher',
+  enum: [
 
-      'finance'
+    'rider',
 
-    ],
+    'driver',
 
-    default: 'rider',
+    'admin',
 
-    index: true
+    'staff_operations',
 
-  },
+    'customer_support',
 
+    'dispatcher',
 
+    'finance'
 
-  /*
-  ===============================================
-  ACCOUNT STATUS
-  ===============================================
-  */
+  ],
 
-  status: {
+  default: 'rider',
 
-    type: String,
+  index: true
 
-    enum: [
+},
 
-      'active',
 
-      'suspended'
 
-    ],
+/*
+=================================================
+ACCOUNT STATUS
+=================================================
+*/
 
-    default: 'active',
 
-    index: true
+status: {
 
-  },
+  type: String,
 
+  enum: [
 
+    'active',
 
-  /*
-  ===============================================
-  STAFF OPERATION PROFILE
-  ===============================================
-  */
+    'suspended'
 
-  department: {
+  ],
 
-    type: String,
+  default: 'active',
 
-    trim: true,
+  index: true
 
-    default: ''
+},
 
-  },
 
 
-  position: {
+/*
+=================================================
+STAFF OPERATION PROFILE
+=================================================
+*/
 
-    type: String,
 
-    trim: true,
+department: {
 
-    default: ''
+  type: String,
 
-  },
+  trim: true,
 
+  default: ''
 
- permissions: {
+},
+
+
+position: {
+
+  type: String,
+
+  trim: true,
+
+  default: ''
+
+},
+
+
+
+/*
+=================================================
+STAFF PERMISSIONS
+=================================================
+
+Examples:
+
+view_trips
+view_users
+manage_drivers
+approve_withdrawals
+view_reports
+
+=================================================
+*/
+
+
+permissions: {
 
   type: [
 
@@ -209,102 +256,99 @@ const schema = new mongoose.Schema({
 
 
 
-  /*
-  Example:
-
-  permissions:[
-    "view_trips",
-    "manage_drivers",
-    "approve_withdrawals",
-    "view_reports"
-  ]
-
-  */
-
-
-
-  /*
-  ===============================================
-  STAFF ACCOUNT CONTROL
-  ===============================================
-  */
-
-
-  createdBy: {
-
-    type: mongoose.Schema.Types.ObjectId,
-
-    ref: 'User',
-
-    default: null
-
-  },
-
-
-  lastLoginAt: {
-
-    type: Date,
-
-    default: null
-
-  },
-
-
-  lastActiveAt: {
-
-    type: Date,
-
-    default: null
-
-  },
-
-
-
-  /*
-  ===============================================
-  PUSH NOTIFICATIONS
-  ===============================================
-  */
-
-  pushTokens: {
-
-    type: [
-
-      pushTokenSchema
-
-    ],
-
-    default: []
-
-  }
-
-
-}, {
-
-  timestamps: true
-
-});
-
-
-
 /*
 =================================================
-INDEXES
+STAFF ACCOUNT CONTROL
 =================================================
 */
 
 
-schema.index({
+createdBy: {
 
-  role: 1,
+  type: mongoose.Schema.Types.ObjectId,
 
-  status: 1
+  ref: 'User',
+
+  default: null
+
+},
+
+
+
+lastLoginAt: {
+
+  type: Date,
+
+  default: null
+
+},
+
+
+
+lastActiveAt: {
+
+  type: Date,
+
+  default: null
+
+},
+
+
+
+/*
+=================================================
+PUSH NOTIFICATIONS
+=================================================
+*/
+
+
+pushTokens: {
+
+  type: [
+
+    pushTokenSchema
+
+  ],
+
+  default: []
+
+}
+
+
+
+}, {
+
+
+timestamps: true
+
 
 });
 
 
+
+
+
 /*
- Staff permission search
+=================================================
+DATABASE INDEXES
+=================================================
+*/
+
+
+/*
+Staff permission lookup
+
+Used by:
+
+permission middleware
+staff access control
+
+Example:
+
+{
+ permissions:"view_trips"
+}
+
 */
 
 schema.index({
@@ -315,7 +359,83 @@ schema.index({
 
 
 
+/*
+Staff department filtering
+
+Example:
+
+Finance staff
+Operations staff
+Support staff
+
+*/
+
+schema.index({
+
+  department: 1,
+
+  role: 1
+
+});
+
+
+
+/*
+Audit tracking
+
+Find staff created by admin
+
+*/
+
+schema.index({
+
+  createdBy: 1,
+
+  createdAt: -1
+
+});
+
+
+
+/*
+Activity monitoring
+
+*/
+
+schema.index({
+
+  lastActiveAt: -1
+
+});
+
+
+
+/*
+Combined account filtering
+
+Used for:
+
+active finance staff
+active operations staff
+
+*/
+
+schema.index({
+
+  role: 1,
+
+  status: 1
+
+});
+
+
+
+
+
 module.exports = mongoose.model(
+
   'User',
+
   schema
+
 );
