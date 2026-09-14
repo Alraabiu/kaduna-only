@@ -824,7 +824,10 @@ const {
   phone,
   email,
   password,
-  role
+  role,
+  department,
+  position,
+  permissions
 }=req.body;
 
 const User =
@@ -873,7 +876,6 @@ password,
 12
 );
 
-
 const staff =
 
 await User.create({
@@ -890,12 +892,25 @@ hashed,
 
 role,
 
+department,
+
+position,
+
+permissions:
+Array.isArray(permissions)
+?
+permissions
+:
+[],
+
+createdBy:
+req.user._id,
+
 status:
 
 'active'
 
 });
-
 
 return res.status(201).json({
 
