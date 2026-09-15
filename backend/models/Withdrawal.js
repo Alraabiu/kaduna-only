@@ -80,19 +80,20 @@ const schema = new mongoose.Schema(
 
     bank: bankSnapshotSchema,
 
-    status: {
-      type: String,
-      enum: [
-        'pending',
-        'approved',
-        'processing',
-        'paid',
-        'rejected',
-        'failed',
-      ],
-      default: 'pending',
-      index: true,
-    },
+   status: {
+  type: String,
+  enum: [
+    'pending',
+    'approved',
+    'processing',
+    'paid',
+    'rejected',
+    'failed',
+    'needs_review',
+  ],
+  default: 'pending',
+  index: true,
+},
 
     adminNote: {
       type: String,

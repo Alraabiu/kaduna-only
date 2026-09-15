@@ -1,6 +1,27 @@
 const router = require('express').Router();
 
-const c = require('../controllers/staffController');
+
+/*
+=========================================================
+CONTROLLERS
+=========================================================
+*/
+
+const c =
+  require('../controllers/staffController');
+
+const withdrawal =
+  require('../controllers/withdrawalController');
+
+const admin =
+  require('../controllers/adminController');
+
+
+/*
+=========================================================
+AUTHORIZATION MIDDLEWARE
+=========================================================
+*/
 
 const {
   requireAuth,
@@ -11,22 +32,28 @@ const requirePermission =
   require('../middleware/permission');
 
 
+/*
+=========================================================
+ALL STAFF ROUTES REQUIRE AUTHENTICATION
+=========================================================
+*/
+
 router.use(requireAuth);
 
 
 
 /*
-==========================================
+=========================================================
 STAFF DASHBOARD
-==========================================
+=========================================================
 */
-
 
 router.get(
 
   '/dashboard',
 
   requireRole(
+    'admin',
     'staff_operations',
     'customer_support',
     'dispatcher',
@@ -38,10 +65,18 @@ router.get(
 );
 
 
+
 /*
-==========================================
-STAFF ACTIVE TRIPS
-==========================================
+=========================================================
+TRIP OPERATIONS
+=========================================================
+*/
+
+
+/*
+---------------------------------------------------------
+VIEW ACTIVE TRIPS
+---------------------------------------------------------
 */
 
 router.get(
@@ -49,6 +84,7 @@ router.get(
   '/trips',
 
   requireRole(
+    'admin',
     'staff_operations',
     'customer_support',
     'dispatcher'
@@ -62,10 +98,81 @@ router.get(
 
 );
 
+
+
 /*
-==========================================
-STAFF DRIVER MANAGEMENT
-==========================================
+---------------------------------------------------------
+VIEW SINGLE TRIP
+---------------------------------------------------------
+*/
+
+router.get(
+
+  '/trips/:id',
+
+  requireRole(
+    'admin',
+    'staff_operations',
+    'customer_support',
+    'dispatcher'
+  ),
+
+  requirePermission(
+    'view_trips'
+  ),
+
+  c.tripDetails
+
+);
+
+
+
+/*
+---------------------------------------------------------
+CANCEL TRIP
+
+Uses the existing administrative cancellation controller.
+
+This preserves:
+- Active-status validation
+- Wallet refund handling
+- walletRefundedAt
+- paymentStatus
+- cancelledAt
+---------------------------------------------------------
+*/
+
+router.patch(
+
+  '/trips/:id/cancel',
+
+  requireRole(
+    'admin',
+    'staff_operations',
+    'dispatcher'
+  ),
+
+  requirePermission(
+    'manage_trips'
+  ),
+
+  admin.cancelTrip
+
+);
+
+
+
+/*
+=========================================================
+DRIVER OPERATIONS
+=========================================================
+*/
+
+
+/*
+---------------------------------------------------------
+VIEW DRIVERS
+---------------------------------------------------------
 */
 
 router.get(
@@ -73,24 +180,108 @@ router.get(
   '/drivers',
 
   requireRole(
+    'admin',
     'staff_operations',
     'dispatcher'
   ),
 
-
-requirePermission(
-  'view_drivers'
-),
-
+  requirePermission(
+    'view_drivers'
+  ),
 
   c.drivers
 
 );
 
+
+
 /*
-==========================================
-STAFF FINANCE OPERATIONS
-==========================================
+---------------------------------------------------------
+VIEW DRIVER DETAILS
+---------------------------------------------------------
+*/
+
+router.get(
+
+  '/drivers/:id',
+
+  requireRole(
+    'admin',
+    'staff_operations',
+    'dispatcher'
+  ),
+
+  requirePermission(
+    'view_drivers'
+  ),
+
+  c.driverDetails
+
+);
+
+
+
+/*
+---------------------------------------------------------
+SUSPEND DRIVER
+---------------------------------------------------------
+*/
+
+router.patch(
+
+  '/drivers/:id/suspend',
+
+  requireRole(
+    'admin',
+    'staff_operations'
+  ),
+
+  requirePermission(
+    'manage_drivers'
+  ),
+
+  c.suspendDriver
+
+);
+
+
+
+/*
+---------------------------------------------------------
+ACTIVATE DRIVER
+---------------------------------------------------------
+*/
+
+router.patch(
+
+  '/drivers/:id/activate',
+
+  requireRole(
+    'admin',
+    'staff_operations'
+  ),
+
+  requirePermission(
+    'manage_drivers'
+  ),
+
+  c.activateDriver
+
+);
+
+
+
+/*
+=========================================================
+FINANCE OPERATIONS
+=========================================================
+*/
+
+
+/*
+---------------------------------------------------------
+VIEW WITHDRAWALS
+---------------------------------------------------------
 */
 
 router.get(
@@ -98,23 +289,110 @@ router.get(
   '/withdrawals',
 
   requireRole(
+    'admin',
     'finance',
     'staff_operations'
   ),
 
-requirePermission(
-  'view_withdrawals'
-),
+  requirePermission(
+    'view_withdrawals'
+  ),
 
-
-  c.withdrawals
+  withdrawal.adminList
 
 );
 
+
+
 /*
-==========================================
-STAFF CUSTOMER SUPPORT
-==========================================
+---------------------------------------------------------
+APPROVE WITHDRAWAL
+---------------------------------------------------------
+*/
+
+router.patch(
+
+  '/withdrawals/:id/approve',
+
+  requireRole(
+    'admin',
+    'finance',
+    'staff_operations'
+  ),
+
+  requirePermission(
+    'approve_withdrawals'
+  ),
+
+  withdrawal.approve
+
+);
+
+
+
+/*
+---------------------------------------------------------
+MARK WITHDRAWAL AS PAID
+---------------------------------------------------------
+*/
+
+router.patch(
+
+  '/withdrawals/:id/paid',
+
+  requireRole(
+    'admin',
+    'finance',
+    'staff_operations'
+  ),
+
+  requirePermission(
+    'approve_withdrawals'
+  ),
+
+  withdrawal.markPaid
+
+);
+
+
+
+/*
+---------------------------------------------------------
+REJECT WITHDRAWAL AND REFUND FUNDS
+---------------------------------------------------------
+*/
+
+router.patch(
+
+  '/withdrawals/:id/reject',
+
+  requireRole(
+    'admin',
+    'finance',
+    'staff_operations'
+  ),
+
+  requirePermission(
+    'approve_withdrawals'
+  ),
+
+  withdrawal.reject
+
+);
+
+
+
+/*
+=========================================================
+CUSTOMER SUPPORT OPERATIONS
+=========================================================
+*/
+
+
+/*
+---------------------------------------------------------
+SEARCH USERS
+---------------------------------------------------------
 */
 
 router.get(
@@ -122,22 +400,84 @@ router.get(
   '/users/search',
 
   requireRole(
+    'admin',
     'customer_support',
     'staff_operations'
   ),
 
-requirePermission(
-  'search_users'
-),
+  requirePermission(
+    'search_users'
+  ),
 
   c.searchUsers
 
 );
 
+
+
 /*
-==========================================
-STAFF USER TRIP HISTORY
-==========================================
+---------------------------------------------------------
+VIEW USER DETAILS
+---------------------------------------------------------
+*/
+
+router.get(
+
+  '/users/:id',
+
+  requireRole(
+    'admin',
+    'customer_support',
+    'staff_operations'
+  ),
+
+  requirePermission(
+    'view_users'
+  ),
+
+  c.userDetails
+
+);
+
+
+
+/*
+---------------------------------------------------------
+UPDATE USER STATUS
+
+The controller must protect privileged accounts:
+- admin
+- staff_operations
+- customer_support
+- dispatcher
+- finance
+---------------------------------------------------------
+*/
+
+router.patch(
+
+  '/users/:id/status',
+
+  requireRole(
+    'admin',
+    'customer_support',
+    'staff_operations'
+  ),
+
+  requirePermission(
+    'manage_users'
+  ),
+
+  c.updateUserStatus
+
+);
+
+
+
+/*
+---------------------------------------------------------
+VIEW USER TRIP HISTORY
+---------------------------------------------------------
 */
 
 router.get(
@@ -145,18 +485,25 @@ router.get(
   '/users/:id/trips',
 
   requireRole(
+    'admin',
     'customer_support',
     'staff_operations'
   ),
 
-requirePermission(
-  'view_trip_history'
-),
+  requirePermission(
+    'view_trip_history'
+  ),
 
   c.userTrips
 
 );
 
 
+
+/*
+=========================================================
+EXPORT ROUTER
+=========================================================
+*/
 
 module.exports = router;
