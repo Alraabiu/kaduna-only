@@ -85,8 +85,7 @@ function normalizeVehicleType(value) {
  * NORMALISE KEKE RIDE TYPE
  * ---------------------------------------------------------
  *
- * single_seat = ₦500
- * private     = ₦2,000
+ * Fare values are controlled by Admin pricing configuration.
  */
 
 function getKekeRideType(value) {
@@ -259,6 +258,10 @@ async function quote(req, res, next) {
      * -----------------------------------------------------
      */
 
+    const pricingConfig =
+      await getPricingConfig();
+
+
     const q =
       quoteFromRoute({
         distanceKm:
@@ -274,7 +277,34 @@ async function quote(req, res, next) {
           normalizedKekeRideType,
 
         source:
-          route.source
+          route.source,
+
+        pickupLabel:
+          pickup.label ||
+          pickup.address ||
+          pickup.name ||
+          '',
+
+        destinationLabel:
+          destination.label ||
+          destination.address ||
+          destination.name ||
+          '',
+
+        pickupPlaceId:
+          pickup.placeId ||
+          pickup.place_id ||
+          null,
+
+        destinationPlaceId:
+          destination.placeId ||
+          destination.place_id ||
+          null,
+
+        routes:
+          pricingConfig.routes || [],
+
+        pricingConfig
       });
 
 
@@ -506,6 +536,10 @@ async function create(req, res, next) {
      * -----------------------------------------------------
      */
 
+    const pricingConfig =
+      await getPricingConfig();
+
+
     const q =
       quoteFromRoute({
         distanceKm:
@@ -521,7 +555,34 @@ async function create(req, res, next) {
           normalizedKekeRideType,
 
         source:
-          route.source
+          route.source,
+
+        pickupLabel:
+          pickup.label ||
+          pickup.address ||
+          pickup.name ||
+          '',
+
+        destinationLabel:
+          destination.label ||
+          destination.address ||
+          destination.name ||
+          '',
+
+        pickupPlaceId:
+          pickup.placeId ||
+          pickup.place_id ||
+          null,
+
+        destinationPlaceId:
+          destination.placeId ||
+          destination.place_id ||
+          null,
+
+        routes:
+          pricingConfig.routes || [],
+
+        pricingConfig
       });
 
 
@@ -721,87 +782,50 @@ farePerPassenger:
 
 
     /*
- * -----------------------------------------------------
- * DRIVER PUSH
- *
- * Sends new ride requests to matching drivers.
- *
- * Supports:
- *
- * - Normal rides
- * - Keke single seat sharing
- * - Keke private rides
- *
- * The push service receives ride type
- * so drivers can decide correctly.
- * -----------------------------------------------------
+     * -----------------------------------------------------
+     * DRIVER PUSH
+     * -----------------------------------------------------
  */
 
-sendToMatchingDrivers(
-  {
-    vehicleType:
+    sendToMatchingDrivers(
       live.vehicleType,
+      {
 
-    rideType:
-      live.rideType
-  },
-  {
+        title:
+          'New ride request',
 
-    title:
-      'New ride request',
+        body:
+          `${live.pickup?.label || 'Pickup'} → ` +
+          `${live.destination?.label || 'Destination'} · ` +
+          `₦${Number(
+            live.fare || 0
+          ).toLocaleString('en-NG')}`,
 
+        url:
+          '/driver',
 
-    body:
-      `${live.pickup?.label || 'Pickup'} → ` +
-      `${live.destination?.label || 'Destination'} · ` +
-      `₦${Number(
-        live.fare || 0
-      ).toLocaleString('en-NG')}`,
+        tag:
+          `ride-${live._id}`,
 
+        data: {
 
-    url:
-      '/driver',
+          type:
+            'NEW_RIDE',
 
+          tripId:
+            live._id
 
-    tag:
-      `ride-${live._id}`,
+        }
 
+      }
 
-    data: {
+    ).catch(e =>
+      console.error(
+        'Push new ride failed:',
+        e.message
+      )
+    );
 
-      type:
-        'NEW_RIDE',
-
-
-      tripId:
-        live._id,
-
-
-      vehicleType:
-        live.vehicleType,
-
-
-      rideType:
-        live.rideType,
-
-
-      seatsRequested:
-        live.seatsRequested || 1,
-
-
-      passengerCapacity:
-        live.passengerCapacity || null
-
-    }
-
-  }
-
-).catch(e =>
-  console.error(
-    'Push new ride failed:',
-    e.message
-  )
-);
 
     /*
      * -----------------------------------------------------
@@ -1247,101 +1271,47 @@ async function available(
     }
 
 
-    /*
- * =========================================================
- * DRIVER ACTIVE VEHICLE CAPACITY CHECK
- * =========================================================
- */
+    const active =
+      await Trip.exists({
 
-const activeTrips =
-  await Trip.find({
+        driver:
+          req.user._id,
 
-    driver:
-      req.user._id,
+        status: {
+          $in: [
 
-    status: {
-      $in: [
+            'DRIVER_ASSIGNED',
 
-        'DRIVER_ASSIGNED',
-        'DRIVER_ARRIVING',
-        'DRIVER_ARRIVED',
-        'TRIP_STARTED'
+            'DRIVER_ARRIVING',
 
-      ]
+            'DRIVER_ARRIVED',
+
+            'TRIP_STARTED'
+
+          ]
+        }
+
+      });
+
+
+    if (active) {
+
+      return res.json({
+
+        success: true,
+
+        data: {
+
+          trips: []
+
+        },
+
+        message:
+          'Complete your active trip before accepting another'
+
+      });
+
     }
-
-  });
-
-
-
-/*
- * Private ride occupies the whole keke.
- */
-const hasPrivateRide =
-  activeTrips.some(trip =>
-    trip.vehicleType === 'keke' &&
-    trip.rideType === 'private'
-  );
-
-
-if (hasPrivateRide) {
-
-  return res.json({
-
-    success:true,
-
-    data:{
-      trips:[]
-    },
-
-    message:
-      'Driver is currently on a private ride'
-
-  });
-
-}
-
-
-
-/*
- * Calculate occupied seats for shared keke.
- */
-const occupiedSeats =
-  activeTrips
-    .filter(trip =>
-      trip.vehicleType === 'keke' &&
-      trip.rideType === 'single_seat'
-    )
-    .reduce(
-      (total, trip) =>
-        total + Number(trip.seatsOccupied || 1),
-      0
-    );
-
-
-const capacity = 4;
-
-/*
- * Keke is full.
- */
-if (
-  occupiedSeats >= capacity
-) {
-
-  return res.json({
-
-    success:true,
-
-    data:{
-      trips:[]
-    },
-
-    message:
-      'Keke passenger capacity reached'
-
-  });
-
-}
 
 
     const t =
@@ -1429,122 +1399,43 @@ async function accept(
     }
 
 
-    /*
- * =========================================================
- * DRIVER ACTIVE TRIP RULE
- * =========================================================
- *
- * PRIVATE KEKE:
- * Driver owns the whole vehicle.
- * Driver cannot accept another passenger.
- *
- * SINGLE SEAT KEKE:
- * Driver can continue accepting passengers
- * until available seats are full.
- *
- * OTHER VEHICLES:
- * Keep existing one-trip restriction.
- * =========================================================
- */
+    const already =
+      await Trip.exists({
 
-const activeTrips =
-  await Trip.find({
+        driver:
+          req.user._id,
 
-    driver:
-      req.user._id,
+        status: {
+          $in: [
 
-    status: {
-      $in: [
+            'DRIVER_ASSIGNED',
 
-        'DRIVER_ASSIGNED',
-        'DRIVER_ARRIVING',
-        'DRIVER_ARRIVED',
-        'TRIP_STARTED'
+            'DRIVER_ARRIVING',
 
-      ]
+            'DRIVER_ARRIVED',
+
+            'TRIP_STARTED'
+
+          ]
+        }
+
+      });
+
+
+    if (already) {
+
+      return res.status(409).json({
+
+        success: false,
+
+        message:
+          'Complete your current trip before accepting another'
+
+      });
+
     }
 
-  });
 
-
-const privateTrip =
-  activeTrips.find(trip =>
-    trip.vehicleType === 'keke' &&
-    trip.rideType === 'private'
-  );
-
-
-if (privateTrip) {
-
-  return res.status(409).json({
-
-    success:false,
-
-    message:
-      'Complete your private ride before accepting another trip'
-
-  });
-
-}
-
-
-/*
- * Normal vehicles cannot carry multiple trips.
- */
-const nonSharedActiveTrip =
-  activeTrips.find(trip =>
-    trip.vehicleType !== 'keke' ||
-    trip.rideType !== 'single_seat'
-  );
-
-
-if (nonSharedActiveTrip) {
-
-  return res.status(409).json({
-
-    success:false,
-
-    message:
-      'Complete your current trip before accepting another'
-
-  });
-
-}
-
-
-/*
- * Check keke shared seat capacity.
- */
-const sharedSeatTrips =
-  activeTrips.filter(trip =>
-    trip.vehicleType === 'keke' &&
-    trip.rideType === 'single_seat'
-  );
-
-
-const occupiedSeats =
-  sharedSeatTrips.reduce(
-    (total, trip) =>
-      total + Number(trip.seatsOccupied || 1),
-    0
-  );
-
-
-const capacity = 4;
-
-
-if (occupiedSeats >= capacity) {
-
-  return res.status(409).json({
-
-    success:false,
-
-    message:
-      'Your keke seats are currently full'
-
-  });
-
-}
     const t =
       await Trip.findOneAndUpdate(
 

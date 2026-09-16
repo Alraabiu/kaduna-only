@@ -521,12 +521,14 @@ function quoteKeke({
 
   source = 'osrm',
 
-  routePricing = null
+  routePricing = null,
+
+  pricing = null
 
 }) {
 
   const price =
-    PRICING.keke;
+    pricing;
 
 
   if (!price) {
@@ -798,25 +800,25 @@ function quoteDistanceBasedVehicle({
 
   source = 'osrm',
 
-  routePricing = null
+  routePricing = null,
+
+  pricing = null
 
 }) {
 
   const price =
-    PRICING[
-      vehicleType
-    ];
+    pricing;
 
 
   if (!price) {
 
     const error =
       new Error(
-        'Unsupported vehicle type'
+        `Admin pricing is not configured for ${vehicleType}`
       );
 
     error.statusCode =
-      400;
+      503;
 
     throw error;
 
@@ -1128,7 +1130,9 @@ function quoteFromRoute({
 
   destinationPlaceId = null,
 
-  routes = []
+  routes = [],
+
+  pricingConfig = null
 
 }) {
 
@@ -1158,6 +1162,57 @@ function quoteFromRoute({
 
     error.statusCode =
       400;
+
+    throw error;
+
+  }
+
+
+  /*
+   * -------------------------------------------------------
+   * ADMIN PRICING CONFIGURATION
+   * -------------------------------------------------------
+   *
+   * MongoDB PricingConfig is authoritative.
+   * Source-code defaults must not override Admin pricing.
+   */
+
+  if (
+    !pricingConfig ||
+    typeof pricingConfig !== 'object'
+  ) {
+
+    const error =
+      new Error(
+        'Admin pricing configuration is not available'
+      );
+
+    error.statusCode =
+      503;
+
+    throw error;
+
+  }
+
+
+  const adminPricing =
+    pricingConfig[
+      normalizedVehicleType
+    ];
+
+
+  if (
+    !adminPricing ||
+    typeof adminPricing !== 'object'
+  ) {
+
+    const error =
+      new Error(
+        `Admin pricing is not configured for ${normalizedVehicleType}`
+      );
+
+    error.statusCode =
+      503;
 
     throw error;
 
@@ -1206,7 +1261,10 @@ function quoteFromRoute({
 
       source,
 
-      routePricing
+      routePricing,
+
+      pricing:
+        adminPricing
 
     });
 
@@ -1230,7 +1288,10 @@ function quoteFromRoute({
 
     source,
 
-    routePricing
+    routePricing,
+
+    pricing:
+      adminPricing
 
   });
 

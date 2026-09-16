@@ -1,12 +1,6 @@
 const PricingConfig =
   require('../models/PricingConfig');
 
-const {
-  PRICING
-} =
-  require('../utils/pricing');
-
-
 const VEHICLES = [
   'bike',
   'keke',
@@ -17,31 +11,36 @@ const VEHICLES = [
 
 /*
 =========================================================
-DEFAULTS
+UNCONFIGURED ADMIN PRICING
 =========================================================
 */
 
-function defaults() {
+function emptyConfig() {
 
   return {
 
-    bike: {
-      ...PRICING.bike
-    },
+    key:
+      'kaduna-default',
 
-    keke: {
-      ...PRICING.keke
-    },
+    configured:
+      false,
 
-    car: {
-      ...PRICING.car
-    },
+    bike:
+      null,
 
-    suv: {
-      ...PRICING.suv
-    },
+    keke:
+      null,
 
-    routes: []
+    car:
+      null,
+
+    suv:
+      null,
+
+    routes: [],
+
+    version:
+      null
 
   };
 
@@ -76,7 +75,7 @@ GET CONFIGURATION
 
 async function getPricingConfig() {
 
-  let config =
+  const config =
     await PricingConfig
       .findOne({
         key:
@@ -85,30 +84,17 @@ async function getPricingConfig() {
       .lean();
 
 
+  /*
+   * Never create developer-defined monetary pricing.
+   * Admin must save the initial pricing configuration.
+   */
+
   if (!config) {
 
-    config =
-      await PricingConfig.create({
-
-        key:
-          'kaduna-default',
-
-        ...defaults(),
-
-        version:
-          'kaduna-v3'
-
-      });
-
-
-    return config.toObject();
+    return emptyConfig();
 
   }
 
-
-  /*
-   * Older database records may not have routes.
-   */
 
   if (
     !Array.isArray(
@@ -121,7 +107,81 @@ async function getPricingConfig() {
   }
 
 
+  config.configured =
+    true;
+
+
   return config;
+
+}
+
+
+/*
+=========================================================
+VALIDATION HELPERS
+=========================================================
+*/
+
+function positiveNumber(
+  value,
+  label
+) {
+
+  const number =
+    Number(value);
+
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+
+    const err =
+      new Error(
+        `${label} must be greater than 0`
+      );
+
+    err.statusCode =
+      400;
+
+    throw err;
+
+  }
+
+
+  return number;
+
+}
+
+
+function nonNegativeNumber(
+  value,
+  label
+) {
+
+  const number =
+    Number(value);
+
+
+  if (
+    !Number.isFinite(number) ||
+    number < 0
+  ) {
+
+    const err =
+      new Error(
+        `${label} must be 0 or greater`
+      );
+
+    err.statusCode =
+      400;
+
+    throw err;
+
+  }
+
+
+  return number;
 
 }
 
@@ -155,113 +215,168 @@ async function updatePricingConfig({
 
 
   const current =
-    await getPricingConfig();
+    await PricingConfig
+      .findOne({
+        key:
+          'kaduna-default'
+      })
+      .lean();
 
 
   const next = {};
 
 
+  /*
+   * Initial configuration must contain every vehicle.
+   * Existing configuration may be partially updated.
+   */
+
   for (
     const vehicle of VEHICLES
   ) {
 
-    const input =
-      pricing[vehicle] ||
-      current[vehicle];
-
-
     if (
-      vehicle === 'keke'
+      !current &&
+      (
+        !pricing[vehicle] ||
+        typeof pricing[vehicle] !== 'object'
+      )
     ) {
 
-      next.keke = {
+      const err =
+        new Error(
+          `Admin must configure ${vehicle} pricing`
+        );
 
-        ...current.keke,
+      err.statusCode =
+        400;
 
-        ...input,
-
-        capacity:
-          Number(
-            input.capacity ??
-            current.keke.capacity ??
-            4
-          ),
-
-        singleSeatFare:
-          Number(
-            input.singleSeatFare ??
-            current.keke.singleSeatFare ??
-            500
-          ),
-
-        privateFare:
-          Number(
-            input.privateFare ??
-            current.keke.privateFare ??
-            2000
-          ),
-
-        etaFactor:
-          Number(
-            input.etaFactor ??
-            current.keke.etaFactor ??
-            1.12
-          ),
-
-        avgKph:
-          Number(
-            input.avgKph ??
-            current.keke.avgKph ??
-            22
-          )
-
-      };
-
-    } else {
-
-      next[vehicle] = {
-
-        ...current[vehicle],
-
-        ...input,
-
-        base:
-          Number(
-            input.base
-          ),
-
-        perKm:
-          Number(
-            input.perKm
-          ),
-
-        minimum:
-          Number(
-            input.minimum
-          ),
-
-        etaFactor:
-          Number(
-            input.etaFactor ??
-            current[vehicle].etaFactor ??
-            1
-          ),
-
-        avgKph:
-          Number(
-            input.avgKph
-          )
-
-      };
+      throw err;
 
     }
 
   }
 
 
+  const currentKeke =
+    current?.keke || {};
+
+  const kekeInput =
+    pricing.keke || {};
+
+
+  next.keke = {
+
+    ...currentKeke,
+
+    ...kekeInput,
+
+    capacity:
+      positiveNumber(
+        kekeInput.capacity ??
+        currentKeke.capacity ??
+        4,
+        'Keke capacity'
+      ),
+
+    singleSeatFare:
+      positiveNumber(
+        kekeInput.singleSeatFare ??
+        currentKeke.singleSeatFare,
+        'Keke single-seat fare'
+      ),
+
+    privateFare:
+      positiveNumber(
+        kekeInput.privateFare ??
+        currentKeke.privateFare,
+        'Keke private fare'
+      ),
+
+    etaFactor:
+      positiveNumber(
+        kekeInput.etaFactor ??
+        currentKeke.etaFactor ??
+        1.12,
+        'Keke ETA factor'
+      ),
+
+    avgKph:
+      positiveNumber(
+        kekeInput.avgKph ??
+        currentKeke.avgKph ??
+        22,
+        'Keke average speed'
+      )
+
+  };
+
+
+  for (
+    const vehicle of [
+      'bike',
+      'car',
+      'suv'
+    ]
+  ) {
+
+    const currentVehicle =
+      current?.[vehicle] || {};
+
+    const input =
+      pricing[vehicle] || {};
+
+
+    next[vehicle] = {
+
+      ...currentVehicle,
+
+      ...input,
+
+      base:
+        nonNegativeNumber(
+          input.base ??
+          currentVehicle.base,
+          `${vehicle} base fare`
+        ),
+
+      perKm:
+        nonNegativeNumber(
+          input.perKm ??
+          currentVehicle.perKm,
+          `${vehicle} per-km fare`
+        ),
+
+      minimum:
+        positiveNumber(
+          input.minimum ??
+          currentVehicle.minimum,
+          `${vehicle} minimum fare`
+        ),
+
+      etaFactor:
+        positiveNumber(
+          input.etaFactor ??
+          currentVehicle.etaFactor ??
+          1,
+          `${vehicle} ETA factor`
+        ),
+
+      avgKph:
+        positiveNumber(
+          input.avgKph ??
+          currentVehicle.avgKph,
+          `${vehicle} average speed`
+        )
+
+    };
+
+  }
+
+
   next.routes =
     Array.isArray(
-      current.routes
+      current?.routes
     )
       ? current.routes
       : [];
@@ -299,31 +414,6 @@ async function updatePricingConfig({
 
       )
       .lean();
-
-
-  /*
-   * Synchronise in-memory pricing.
-   */
-
-  Object.assign(
-    PRICING.bike,
-    updated.bike
-  );
-
-  Object.assign(
-    PRICING.keke,
-    updated.keke
-  );
-
-  Object.assign(
-    PRICING.car,
-    updated.car
-  );
-
-  Object.assign(
-    PRICING.suv,
-    updated.suv
-  );
 
 
   return updated;
@@ -380,9 +470,22 @@ async function addRoutePricing({
     await getPricingConfig();
 
 
-  /*
-   * Prevent duplicate route definitions.
-   */
+  if (
+    config.configured === false
+  ) {
+
+    const err =
+      new Error(
+        'Configure global Admin pricing before adding route pricing'
+      );
+
+    err.statusCode =
+      409;
+
+    throw err;
+
+  }
+
 
   const duplicate =
     config.routes?.find(
@@ -433,7 +536,6 @@ async function addRoutePricing({
     destinationPlaceId,
 
     active:
-
       active !== false,
 
     bike: {
@@ -471,10 +573,8 @@ async function addRoutePricing({
           },
 
           $set: {
-
             version:
               `kaduna-v3-${Date.now()}`
-
           }
 
         },
@@ -483,7 +583,6 @@ async function addRoutePricing({
           new: true,
 
           runValidators: true
-
         }
 
       )
@@ -513,6 +612,23 @@ async function updateRoutePricing({
 
   const config =
     await getPricingConfig();
+
+
+  if (
+    config.configured === false
+  ) {
+
+    const err =
+      new Error(
+        'Configure global Admin pricing before updating route pricing'
+      );
+
+    err.statusCode =
+      409;
+
+    throw err;
+
+  }
 
 
   const route =
@@ -666,14 +782,12 @@ async function updateRoutePricing({
         {
           $set:
             set
-
         },
 
         {
           new: true,
 
           runValidators: true
-
         }
 
       )
@@ -713,17 +827,14 @@ async function removeRoutePricing(
           },
 
           $set: {
-
             version:
               `kaduna-v3-${Date.now()}`
-
           }
 
         },
 
         {
           new: true
-
         }
 
       )
