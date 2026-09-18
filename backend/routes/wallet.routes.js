@@ -72,6 +72,11 @@ USER TO USER WALLET TRANSFER
 */
 
 r.post(
+  '/transfer/verify-recipient',
+  c.verifyRecipient
+);
+
+r.post(
   '/transfer',
   c.transfer
 );
