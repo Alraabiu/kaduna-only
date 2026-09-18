@@ -9,6 +9,16 @@ const Wallet = require('../models/Wallet');
 const DeviceSession = require('../models/DeviceSession');
 
 const signToken = require('../utils/jwt');
+const {
+  createPasswordReset,
+  verifyPasswordResetOtp,
+  validateResetToken,
+  consumePasswordReset
+} = require('../services/passwordResetService');
+
+const {
+  sendPasswordResetOtp
+} = require('../services/smsService');
 
 
 const {
@@ -27,7 +37,8 @@ const {
 
 
 const {
-  createSession
+  createSession,
+  revokeAllUserSessions
 } = require('../services/sessionService');
 
 
@@ -791,4 +802,433 @@ publicUser(req.user)
 
 
 
-module.exports = { register, login, refresh, logout, me };
+async function forgotPassword(req,res,next){
+
+  try {
+
+    const phone =
+      String(req.body?.phone || '')
+        .trim();
+
+    if(!phone){
+
+      return res.status(400).json({
+        success:false,
+        message:'Phone number is required'
+      });
+
+    }
+
+
+    const genericResponse = {
+      success:true,
+      message:
+        'If an account exists for this phone number, a verification code will be sent.'
+    };
+
+
+    const user =
+      await User.findOne({
+        phone
+      });
+
+
+    /*
+    Do not reveal whether the account exists.
+    */
+
+    if(!user){
+
+      return res.json(
+        genericResponse
+      );
+
+    }
+
+
+    /*
+    Suspended accounts must not use password recovery
+    to bypass account restrictions.
+    */
+
+    if(user.status !== 'active'){
+
+      return res.json(
+        genericResponse
+      );
+
+    }
+
+
+    const resetRequest =
+      await createPasswordReset(
+        user
+      );
+
+
+    /*
+    A recent reset request already exists.
+
+    Return the same generic response used for a successful
+    request so the endpoint does not reveal whether the
+    supplied phone number belongs to an account.
+
+    No additional SMS is sent during the cooldown.
+    */
+
+    if(
+      !resetRequest.success &&
+      resetRequest.reason ===
+        'RESEND_COOLDOWN'
+    ){
+
+      return res.json({
+
+        success:true,
+
+        message:
+          'If an account exists for that phone number, a verification code will be sent shortly.'
+
+      });
+
+    }
+
+
+    const {
+      otp
+    } =
+      resetRequest;
+
+
+    try {
+
+      await sendPasswordResetOtp({
+        phone:
+          user.phone,
+        otp
+      });
+
+    }catch(smsError){
+
+      /*
+      Do not leave a usable OTP behind when delivery
+      failed.
+
+      Requiring the model here avoids changing the
+      permanent User record.
+      */
+
+      const PasswordReset =
+        require('../models/PasswordReset');
+
+      await PasswordReset.deleteOne({
+        userId:
+          user._id
+      });
+
+
+      console.error(
+        'Password reset SMS delivery failed:',
+        smsError.message
+      );
+
+
+      /*
+      Configuration/provider failure is different from
+      an unknown phone number. We must not tell the user
+      that a code was sent when it was not.
+      */
+
+      return res.status(503).json({
+        success:false,
+        message:
+          'Password recovery service is temporarily unavailable. Please try again later.'
+      });
+
+    }
+
+
+    return res.json(
+      genericResponse
+    );
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
+
+
+
+/*
+=========================================================
+VERIFY PASSWORD RESET CODE
+=========================================================
+*/
+
+async function verifyResetCode(req,res,next){
+
+  try {
+
+    const phone =
+      String(req.body?.phone || '')
+        .trim();
+
+    const otp =
+      String(req.body?.otp || '')
+        .trim();
+
+
+    if(!phone || !otp){
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Phone number and verification code are required'
+      });
+
+    }
+
+
+    if(!/^\d{6}$/.test(otp)){
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Verification code must be 6 digits'
+      });
+
+    }
+
+
+    const user =
+      await User.findOne({
+        phone
+      });
+
+
+    if(!user){
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Invalid or expired verification code'
+      });
+
+    }
+
+
+    const result =
+      await verifyPasswordResetOtp({
+        userId:
+          user._id,
+        otp
+      });
+
+
+    if(!result.success){
+
+      if(
+        result.reason ===
+        'TOO_MANY_ATTEMPTS'
+      ){
+
+        return res.status(429).json({
+          success:false,
+          message:
+            'Too many incorrect attempts. Request a new verification code.'
+        });
+
+      }
+
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Invalid or expired verification code'
+      });
+
+    }
+
+
+    return res.json({
+
+      success:true,
+
+      message:
+        'Verification successful',
+
+      data:{
+        resetToken:
+          result.resetToken
+      }
+
+    });
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
+
+
+
+/*
+=========================================================
+RESET PASSWORD
+=========================================================
+*/
+
+async function resetPassword(req,res,next){
+
+  try {
+
+    const phone =
+      String(req.body?.phone || '')
+        .trim();
+
+    const resetToken =
+      String(req.body?.resetToken || '')
+        .trim();
+
+    const newPassword =
+      String(req.body?.newPassword || '');
+
+
+    if(
+      !phone ||
+      !resetToken ||
+      !newPassword
+    ){
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Phone number, reset token and new password are required'
+      });
+
+    }
+
+
+    if(newPassword.length < 8){
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Password must be at least 8 characters'
+      });
+
+    }
+
+
+    const user =
+      await User.findOne({
+        phone
+      });
+
+
+    if(!user){
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Invalid or expired password reset request'
+      });
+
+    }
+
+
+    const resetRecord =
+      await validateResetToken({
+        userId:
+          user._id,
+        resetToken
+      });
+
+
+    if(!resetRecord){
+
+      return res.status(400).json({
+        success:false,
+        message:
+          'Invalid or expired password reset request'
+      });
+
+    }
+
+
+    /*
+    Use the same bcrypt cost as the existing
+    authentication implementation.
+    */
+
+    user.passwordHash =
+      await bcrypt.hash(
+        newPassword,
+        12
+      );
+
+
+    await user.save();
+
+
+    /*
+    Reset token becomes unusable immediately.
+    */
+
+    await consumePasswordReset(
+      resetRecord
+    );
+
+
+    /*
+    Revoke existing sessions after a password reset.
+
+    This prevents a previously authenticated device
+    from remaining logged in with old credentials.
+    */
+
+    await revokeAllUserSessions(user._id);
+
+
+    return res.json({
+
+      success:true,
+
+      message:
+        'Password updated successfully. Please log in with your new password.'
+
+    });
+
+
+  }catch(error){
+
+    next(error);
+
+  }
+
+}
+
+
+
+
+module.exports = {
+  register,
+  login,
+  refresh,
+  logout,
+  me,
+  forgotPassword,
+  verifyResetCode,
+  resetPassword
+};
